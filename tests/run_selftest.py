@@ -6,12 +6,14 @@
   2. 가짜 ComfyUI(tests/mock_comfy.py)·가짜 Ollama(tests/mock_ollama.py)를 빈 포트에 띄움
   3. python tests/nk_mocked.py ep auto selftest01 --fresh  (태그 판별기·뼈대 찾기도 가짜, tests/fakes.py)
   4. 단계마다 기록(auto/state.json)과 결과 파일이 생겼는지 보고 표로 출력
+     (말풍선 단계의 표지도 봄: page_00.png · cover/cover.png, 끝까지 가는 경우는 가짜 ComfyUI 로 그린 cover/art.png 까지)
 
 사용:
   python tests/run_selftest.py                 여섯 경우 다 (기본, 1~2분): pass fail garbage error qwenfail unifyfail
   python tests/run_selftest.py --mode pass     검수 AI·판별기가 '다 좋음' 이라고 답하는 경우만
   python tests/run_selftest.py --mode fail     '다 틀림' 이라고 답하는 경우만 (고치기 경로)
   python tests/run_selftest.py --mode both     pass + fail
+  python tests/run_selftest.py --mode duo      LoRA 없는 두 명 컷 나눠 그리기 (nk_duosplit) / duonoimpact = Impact Pack 없는 ComfyUI
   python tests/run_selftest.py --keep          임시 폴더를 지우지 않음 (그림·로그 보기)
 끝 코드: 0 = 모두 통과, 1 = 하나라도 실패"""
 import os, sys, json, time, shutil, socket, argparse, subprocess, tempfile, hashlib
@@ -47,7 +49,7 @@ def _glob(d, sub, ext=".png"):
     return sorted(f for f in os.listdir(p) if f.endswith(ext)) if os.path.isdir(p) else []
 
 
-def file_checks(ep_dir, mode, duo="compose"):
+def file_checks(ep_dir, mode, duo="compose", need_art=False):
     """단계 -> (통과?, 설명). 파일로만 판단 (단계 기록은 따로 봄)"""
     cuts = _glob(ep_dir, "cuts")
     out = {}
@@ -87,6 +89,12 @@ def file_checks(ep_dir, mode, duo="compose"):
             out[k] = (True, "(--render anima: 건너뜀)")
         out["letter"] = (pdf == ["out"], "out/book.pdf 한 벌 (있음: %s)" % ",".join(pdf))
         out["story"] = (not _exists(ep_dir, "story", "storyfix.json"), "(--render anima: 이야기 검사 꺼짐 — storyfix.json 없어야 함)")
+    # 표지 (nk_cover.py): 책마다 page_00.png + 표지만 따로 cover/cover.png. need_art = 가짜 ComfyUI 로 표지 그림까지 그려졌는지
+    ok_l, d_l = out["letter"]
+    cov = all(_exists(ep_dir, d, "page_00.png") for d in pdf) and _exists(ep_dir, "cover", "cover.png")
+    art = _exists(ep_dir, "cover", "art.png")
+    out["letter"] = (ok_l and cov and (art or not need_art),
+                     d_l + " + 표지 page_00.png·cover/cover.png %s, 그림 cover/art.png %s" % ("있음" if cov else "없음", "있음" if art else "없음"))
     return out
 
 
@@ -124,10 +132,32 @@ MODES = {
     "layer": ("pass", "pass", "", "all"),
     "layerw": ("pass", "pass", "", "all"),
     "anima": ("pass", "pass", "", "all"),
+    "duo": ("pass", "pass", "", "all"),
+    "duonoimpact": ("pass", "pass", "", "all"),
 }
-MODE_ARGS = {"layer": ["--duo", "layer", "--render", "noob"], "layerw": ["--duo", "layer", "--render", "noob"], "anima": ["--render", "anima"]}
+MODE_ARGS = {"layer": ["--duo", "layer", "--render", "noob"], "layerw": ["--duo", "layer", "--render", "noob"], "anima": ["--render", "anima"],
+             "duo": ["--render", "anima"], "duonoimpact": ["--render", "anima"]}
 _DUO4 = '        shot: %s\n        angle: eye\n        loc: park\n        action: "looking at another"'
-PLAN_PATCH = {"layerw": (_DUO4 % "full", _DUO4 % "waist")}
+_NOLORA = ("cast: {hero: testcat, buddy: testgoat}", "cast: {hero: testknight, buddy: testgoat}")    # 두 사람 다 LoRA 없음
+PLAN_PATCH = {"layerw": (_DUO4 % "full", _DUO4 % "waist"), "duo": _NOLORA, "duonoimpact": _NOLORA}
+# 가짜 ComfyUI 에서 없는 척할 노드 (Impact Pack 이 없는 ComfyUI -> 두 명 컷은 예전처럼 한 번에)
+MODE_HIDE = {"duonoimpact": ("RegionalSampler", "CombineRegionalPrompts", "RegionalPrompt", "KSamplerAdvancedProvider", "ToBasicPipe")}
+
+
+def duo_checks(ep_dir, mode, log):
+    """duo·duonoimpact: 두 명 컷 4 를 어느 길로 그렸나 -> (통과?, 설명)"""
+    def js(name):
+        p = os.path.join(ep_dir, name)
+        return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    ds, am, rl = js("duosplit.json"), js("animamake.json"), js("regionlora.json")
+    if mode == "duo":
+        r = ds.get("4") or {}
+        ok = bool(r.get("split_ok")) and "4" not in am and _exists(ep_dir, "cuts_base", "cut04.png") and \
+            bool((rl.get("cut04") or {}).get("spans")) and (rl.get("cut04") or {}).get("duosplit") is True
+        return ok, "duosplit.json 4 split_ok=%s, cuts_base/cut04.png, regionlora.json cut04 spans=%s" % (r.get("split_ok"), (rl.get("cut04") or {}).get("spans"))
+    warned = "[WARN] ComfyUI 에 나눠 그리기 노드(RegionalSampler" in log
+    ok = "4" in am and not ds and warned
+    return ok, "Impact Pack 없음 -> animamake.json 에 4 (%s), duosplit.json 없음 (%s), 경고 줄 (%s)" % ("4" in am, not ds, warned)
 
 
 def run_once(mode, keep, timeout, verbose):
@@ -144,7 +174,7 @@ def run_once(mode, keep, timeout, verbose):
     dw = os.path.join(home, "fake_dwpose.onnx")
     open(dw, "wb").close()
     cp, op = free_port(), free_port()
-    csrv, cstate = mock_comfy.serve(cp, os.path.join(home, "_comfy"), fail_class)
+    csrv, cstate = mock_comfy.serve(cp, os.path.join(home, "_comfy"), fail_class, hide=MODE_HIDE.get(mode, ()))
     osrv, ostate = mock_ollama.serve(op, om)
     env = dict(os.environ)
     env.setdefault("NK_CHARS", os.path.join(KIT, "tests", "fixtures", "characters"))
@@ -172,7 +202,12 @@ def run_once(mode, keep, timeout, verbose):
 
     sp = os.path.join(ep_dir, "auto", "state.json")
     state = json.load(open(sp, encoding="utf-8")) if os.path.exists(sp) else {}
-    fc = file_checks(ep_dir, tm, "layer" if mode in ("layer", "layerw") else ("anima" if mode == "anima" else "compose"))
+    fc = file_checks(ep_dir, tm, "layer" if mode in ("layer", "layerw") else ("anima" if mode in ("anima", "duo", "duonoimpact") else "compose"),
+                     need_art=(expect == "all"))
+    if mode in ("duo", "duonoimpact"):
+        ok_m, d_m = fc["make"]
+        ok_d, d_d = duo_checks(ep_dir, mode, log)
+        fc["make"] = (ok_m and ok_d, d_m + " + " + d_d)
     if mode == "layerw":
         kpf = os.path.join(ep_dir, "poses", "cut04_kp.json")
         fr = (json.load(open(kpf, encoding="utf-8")).get("framed") or {}) if os.path.exists(kpf) else {}

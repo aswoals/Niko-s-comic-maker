@@ -388,6 +388,41 @@ def apply_cfg_rescale(graph, mult=None):
 
 
 # ---------------------------------------------------------------- ComfyUI client
+# ComfyUI 가 작업을 잃어버리면(재시작 등) 끝없이 기다리지 않고 멈춤
+#   예전 Comfy.wait 는 기록(/history)만 봐서, ComfyUI 를 다시 켜거나 대기열을 지우면 끝없이 기다렸음.
+#   - JOB_CHECK_SECS 초마다 대기열도 확인 -> JOB_LOST_CHECKS 번 연달아 대기열·기록 어디에도 없으면(또는 ComfyUI 가 대답이 없으면) ComfyJobError
+#   - 시간 제한(환경 변수 NK_COMFY_JOB_TIMEOUT 초, 없으면 JOB_TIMEOUT)을 넘기면 그 작업을 ComfyUI 대기열에서 빼고 ComfyJobError
+#   - run_jobs 가 도중에 멈추면 넣어 두고 아직 안 받은 작업은 ComfyUI 대기열에서 뺌
+JOB_CHECK_SECS = 5.0     # 대기열을 확인하는 간격 (초)
+JOB_LOST_CHECKS = 3      # 이만큼 연달아 어디에도 없으면 '작업을 잃어버림'
+JOB_TIMEOUT = 0          # 작업 하나의 시간 제한 (초). 0 = 제한 없음 (그림 한 장이 몇 분 걸릴 수 있어서 기본은 없음)
+
+
+class ComfyJobError(RuntimeError):
+    """ComfyUI 작업이 사라짐(ComfyUI 재시작·대기열에서 지움 등) 또는 시간 제한을 넘김"""
+
+
+def job_timeout():
+    """작업 하나의 시간 제한 (초, None = 없음): 환경 변수 NK_COMFY_JOB_TIMEOUT > JOB_TIMEOUT"""
+    try:
+        t = float(os.environ.get("NK_COMFY_JOB_TIMEOUT") or JOB_TIMEOUT or 0)
+    except ValueError:
+        t = 0
+    return t if t > 0 else None
+
+
+def is_job_error(e):
+    """ComfyJobError 인가. nk.py 를 바로 실행하면 이 파일이 '__main__' 과 'nk' 로 두 번 읽혀 클래스가 둘일 수 있어서 이름으로 봄"""
+    return type(e).__name__ == "ComfyJobError"
+
+
+def comfy_job_failed(e):
+    """ComfyJobError 를 traceback 없이 한국어로 알리고 멈춤 (종료 코드 1 = 다른 ComfyUI 작업 실패와 같음)"""
+    print("\n[ERROR] %s" % e)
+    print("        ComfyUI 가 켜져 있는지 확인하고 같은 명령을 다시 실행하세요 (이미 저장된 그림은 그대로 있음).")
+    sys.exit(1)
+
+
 class Comfy:
     def __init__(self, server):
         self.base = None
@@ -477,20 +512,97 @@ class Comfy:
         r = self._post("/prompt", {"prompt": graph, "client_id": self.client_id})
         return r["prompt_id"]
 
-    def wait(self, pid, label=""):
-        t0 = time.time()
-        while True:
+    def _history(self, pid):
+        """/history/<pid> -> dict. ComfyUI 가 대답하지 않으면(꺼짐·다시 켜는 중) None"""
+        import http.client
+        try:
             h = self._get("/history/" + pid)
-            if pid in h:
+        except (OSError, ValueError, http.client.HTTPException):     # 연결 끊김(URLError 도 OSError)·이상한 대답
+            return None
+        return h if isinstance(h, dict) else {}
+
+    def wait(self, pid, label="", timeout=None, poll=1.0):
+        """작업이 끝날 때까지 기다림 -> outputs (위 설명).
+        timeout(초)이 없으면 job_timeout() (기본 제한 없음). poll = 기록을 보는 간격(초)"""
+        if timeout is None:
+            timeout = job_timeout()
+        t0 = time.time()
+        checked, gone, shown, last = t0, 0, -1, t0
+        while True:
+            h = self._history(pid)
+            if h and pid in h:
                 st = h[pid].get("status", {})
                 if st.get("status_str") == "error":
                     print("[ERROR] job failed:", json.dumps(st.get("messages", []))[:1500])
                     sys.exit(1)
                 return h[pid]["outputs"]
-            time.sleep(1.0)
+            now = time.time()
+            if now - last > 60:          # 절전·작업 멈춤으로 이 프로세스가 얼어 있던 시간은 시간 제한에 안 셈
+                t0 += now - last
+                checked = now
+            last = now
+            if timeout and now - t0 > timeout:
+                if pid in (self._history(pid) or {}):           # 그 사이에 끝났음 -> 위에서 받음
+                    continue
+                self.cancel([pid])
+                raise ComfyJobError("ComfyUI 작업이 %d초 안에 끝나지 않아 ComfyUI 대기열에서 뺐습니다 (%s)" % (timeout, label))
+            if now - checked >= JOB_CHECK_SECS:
+                checked = now
+                where = "gone" if h is None else self._where(pid)
+                if where == "gone":
+                    if pid in (self._history(pid) or {}):       # 그 사이에 끝났음 -> 위에서 받음
+                        continue
+                    gone += 1
+                    if gone >= JOB_LOST_CHECKS:
+                        if h is None:
+                            raise ComfyJobError("ComfyUI 가 대답하지 않습니다 - 꺼졌거나 다시 켜는 중 (%s)" % label)
+                        raise ComfyJobError("ComfyUI 가 작업을 잃어버렸습니다 - 대기열에도 기록에도 없음 "
+                                            "(ComfyUI 를 다시 켰거나 대기열을 지웠나요?) (%s)" % label)
+                else:
+                    gone = 0
+            time.sleep(poll)
             el = int(time.time() - t0)
-            if el % 10 == 0:
+            if el % 10 == 0 and el != shown:
+                shown = el
                 print("   ... %s %ds" % (label, el), end="\r")
+
+    def _where(self, pid):
+        """ComfyUI 대기열에서 이 작업: 'run'(도는 중) / 'wait'(줄 서 있음) / 'gone'(없음) / ''(모양을 몰라 판단 안 함)"""
+        try:
+            q = self._get("/queue")
+        except Exception:
+            return ""
+        if not isinstance(q, dict) or not isinstance(q.get("queue_running"), list) or not isinstance(q.get("queue_pending"), list):
+            return ""
+        for key, name in (("queue_running", "run"), ("queue_pending", "wait")):
+            for x in q[key]:
+                if isinstance(x, (list, tuple)) and len(x) > 1 and isinstance(x[1], str):
+                    xid = x[1]
+                elif isinstance(x, dict) and isinstance(x.get("prompt_id"), str):
+                    xid = x["prompt_id"]
+                else:
+                    return ""                                    # 모르는 모양 -> 잃어버렸다고 판단하지 않음
+                if xid == pid:
+                    return name
+        return "gone"
+
+    def cancel(self, pids):
+        """작업들을 ComfyUI 대기열에서 빼고, 그중 지금 도는 것이 있으면 멈춤 (실패해도 조용히 넘어감)"""
+        pids = [p for p in (pids or []) if p]
+        if not pids:
+            return
+
+        def post(path, data):
+            try:
+                req = urllib.request.Request(self.base + path, data=json.dumps(data).encode("utf-8"),
+                                             headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=10).read()
+            except Exception:
+                pass
+        post("/queue", {"delete": pids})
+        for p in pids:
+            if self._where(p) == "run":
+                post("/interrupt", {"prompt_id": p})
 
     def fetch(self, img, dest):
         q = urllib.parse.urlencode({"filename": img["filename"], "subfolder": img.get("subfolder", ""),
@@ -504,8 +616,10 @@ class Comfy:
 
 
 # ---------------------------------------------------------------- commands
-def run_jobs(cfg, jobs, run_name, dry):
-    """jobs: list of dict(label, graph, positive, negative, settings, seed). returns list of result dicts"""
+def run_jobs(cfg, jobs, run_name, dry, window=1, job_timeout=None, poll=1.0):
+    """jobs: list of dict(label, graph, positive, negative, settings, seed). returns list of result dicts
+    window = ComfyUI 에 미리 넣어 둘 작업 수 (1 = 하나 넣고 끝나길 기다림), job_timeout·poll = Comfy.wait 로 그대로.
+    도중에 멈추면(ComfyJobError·작업 실패·Ctrl+C) 넣어 두고 아직 안 받은 작업은 ComfyUI 대기열에서 뺌"""
     out_dir = os.path.join(cfg.get("output_root", os.path.join(KIT, "runs")), run_name)
     if dry:
         for j in jobs:
@@ -523,10 +637,29 @@ def run_jobs(cfg, jobs, run_name, dry):
     c = Comfy(cfg.get("server", "auto"))
     print("ComfyUI:", c.base, "| output:", out_dir)
     results = []
+    pids = {}
+    try:
+        _run_jobs_loop(c, jobs, out_dir, results, max(1, int(window or 1)), pids, job_timeout, poll)
+    except BaseException:
+        if pids:
+            c.cancel(list(pids.values()))
+        raise
+    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=1)
+    print("done. %d images -> %s" % (len(results), out_dir))
+    return results
+
+
+def _run_jobs_loop(c, jobs, out_dir, results, window, pids, job_timeout, poll):
+    """run_jobs 의 본체. pids = 넣었지만 아직 안 받은 작업 {번호: prompt_id} (도중에 멈추면 run_jobs 가 대기열에서 뺌)"""
+    nxt = 0
     for i, j in enumerate(jobs, 1):
         print("[%d/%d] %s" % (i, len(jobs), j["label"]))
-        pid = c.queue(j["graph"], raw=bool(j.get("raw")))
-        outputs = c.wait(pid, j["label"])
+        while nxt < len(jobs) and nxt < i - 1 + window:
+            pids[nxt] = c.queue(jobs[nxt]["graph"], raw=bool(jobs[nxt].get("raw")))
+            nxt += 1
+        outputs = c.wait(pids[i - 1], j["label"], timeout=job_timeout, poll=poll)
+        pids.pop(i - 1)
         imgs = []
         for node in outputs.values():
             for im in node.get("images", []):
@@ -542,10 +675,6 @@ def run_jobs(cfg, jobs, run_name, dry):
             if j.get("meta"):
                 results[-1].update(j["meta"])
             print("   saved", fn)
-    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=1)
-    print("done. %d images -> %s" % (len(results), out_dir))
-    return results
 
 
 def cmd_gen(args):
@@ -1438,7 +1567,12 @@ def main():
     if args.cmd == "ep" and not getattr(args, "ep_cmd", None):
         print(nk_webtoon.__doc__)
         return
-    args.func(args)
+    try:
+        args.func(args)
+    except RuntimeError as e:          # ComfyUI 가 작업을 잃어버림·시간 제한 -> traceback 대신 한국어 한 줄
+        if not is_job_error(e):
+            raise
+        comfy_job_failed(e)
 
 
 if __name__ == "__main__":

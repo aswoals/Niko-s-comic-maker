@@ -1,4 +1,5 @@
 # 글콘티용 첨부 파일 예시: 형식·리듬만 보여 주는 2쪽 계획표 (캐릭터·이야기는 지어낸 것)
+# scene = 보이는 사람 한 명당 영어 한 문장 (혼자 컷 1, 두 명 컷 2, 사람 없는 컷 1)
 title: "우산 하나"
 pages_wanted: 2
 cast: {hero: mychar, buddy: buddy}
@@ -24,7 +25,7 @@ pages:
         angle: eye
         loc: shop
         action: "standing, worried, wet"
-        scene: "The fox boy stands under a shop awning with his arms crossed against the cold, looking up at the rain."
+        scene: "The fox boy stands under a shop awning with his arms crossed against the cold, looking up at the rain with a worried frown."
         lines:
           - {who: hero, kind: aside, text: "우산 놓고 왔는데…"}
       - who: [buddy]
@@ -34,7 +35,7 @@ pages:
         action: "walking, smile, holding umbrella"
         props: [umbrella]
         show: ["The rabbit girl holds a yellow umbrella"]
-        scene: "The rabbit girl walks along the wet street holding a yellow umbrella over her head with her right hand."
+        scene: "The rabbit girl walks along the wet street, holding a yellow umbrella over her head with her right hand and smiling as she looks ahead."
         lines:
           - {who: buddy, text: "어? 거기서 뭐 해?"}
       - who: [hero]
@@ -42,7 +43,7 @@ pages:
         angle: eye
         bg: simple
         action: "blush, embarrassed, sweatdrop"
-        scene: "Close-up of the fox boy's embarrassed face, a drop of sweat on his cheek."
+        scene: "The fox boy blushes in an embarrassed close-up, glancing away with a drop of sweat on his cheek."
         lines:
           - {who: hero, text: "그, 그냥… 비 구경."}
   - note: "전·결 — 둘이 우산 하나를 같이 쓰고 걷다가, 비가 그치고 무지개가 뜬다"
@@ -54,7 +55,7 @@ pages:
         action: "walking, sharing umbrella"
         roles: {hero: "blush, looking away", buddy: "smile, holding umbrella"}
         props: [umbrella]
-        scene: "The rabbit girl holds the yellow umbrella over both of them as they walk side by side. The fox boy looks away, blushing."
+        scene: "The rabbit girl walks beside the fox boy, holding the yellow umbrella high over both heads and looking at the fox boy with a warm smile. The fox boy walks beside the rabbit girl under the umbrella, looking away with a shy blush."
         lines:
           - {who: buddy, text: "같이 가자."}
           - {who: hero, kind: whisper, text: "…고마워."}
@@ -69,7 +70,7 @@ pages:
         angle: side
         loc: street
         action: "looking up, surprised, open mouth"
-        scene: "The rabbit girl tilts the umbrella back and looks up at the sky with her mouth open."
+        scene: "The rabbit girl tilts the umbrella back and looks up at the sky in surprise, her mouth wide open."
         lines:
           - {who: buddy, kind: shout, text: "봐! 그쳤어!"}
       - who: [hero, buddy]
@@ -81,6 +82,6 @@ pages:
         roles: {hero: "smile", buddy: "smile, holding umbrella"}
         props: [umbrella]
         show: ["There is a rainbow in the sky"]
-        scene: "Seen from low behind, the two of them stand on the wet street looking up at a big rainbow across the clearing sky."
+        scene: "The fox boy stands on the wet street, looking up at the big rainbow across the clearing sky with a happy smile. The rabbit girl stands next to the fox boy with the yellow umbrella in her hand, smiling up at the same rainbow."
         lines:
           - {kind: narration, text: "우산이 하나라서 다행이었다."}

@@ -41,7 +41,7 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
 **선택** (없으면 그 기능만 안 된다)
 | 무엇 | 쓰는 곳 |
 |---|---|
-| ComfyUI 확장 [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) (RegionalSampler 등) | LoRA 캐릭터가 나오는 두 명 컷 |
+| ComfyUI 확장 [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) (RegionalSampler 등) | 모든 두 명 컷 나눠 그리기 (두 사람 옷과 생김새가 덜 섞임). 없으면 LoRA 없는 두 명 컷은 예전처럼 한 번에 그림. LoRA 캐릭터가 나오는 두 명 컷에는 꼭 필요 |
 | [Ollama](https://ollama.com/)와 `gemma4:e4b-it-qat` 같은 작은 비전 모델 | 자동 검수, 한국어 고치기 요청 해석, 로컬 계획 쓰기 |
 | NoobAI-XL V-Pred 1.0 ([Laxhar/noobai-XL-Vpred-1.0](https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0)) | 예전 흐름 `--render noob`, `nk gen` |
 | Qwen-Image-Edit 2509 (fp8)와 `qwen_2.5_vl_7b_fp8_scaled` | 문장으로 컷 고치기, 소품 넣기, 두 명 합치기 |
@@ -76,6 +76,7 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
   .\nk.bat ep fix ep01 3 --add "smile"   # 3번 컷 태그를 고쳐서 그 컷만 다시
   ```
   완성본은 `episodes/<화>/out*/page_*.png`와 `book.pdf`로 나오고, 한 장짜리 검토 그림은 `episodes/<화>/auto/review.png`에 생긴다.
+  맨 앞 `page_00.png`(book.pdf 첫 쪽)는 표지다(제목, 주인공 그림, 'AI로 제작' 문구). 글자·그림은 `cover.yaml`에서 바꾸거나 끄고, `.\nk.bat ep cover ep01`로 표지만 다시 만든다.
 - 다른 명령은 `.\nk.bat --help`, `.\nk.bat ep`, [nk_guide.md](nk_guide.md)에 있다. 계획표 형식은 [docs/prompt_plan.md](docs/prompt_plan.md), 콘티 규칙은 [docs/conti_rules.md](docs/conti_rules.md)를 보면 된다.
 
 ## 폴더
@@ -154,7 +155,7 @@ The required model files total about 7.4 GB.
 **Optional** (without it, only that feature is unavailable)
 | What | Used for |
 |---|---|
-| ComfyUI extension [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) (RegionalSampler, etc.) | two-character cuts with a LoRA character |
+| ComfyUI extension [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) (RegionalSampler, etc.) | splitting every two-character cut so the two characters' looks and clothes mix less. Without it, two-character cuts without a LoRA character are drawn in one pass as before; required for two-character cuts with a LoRA character |
 | [Ollama](https://ollama.com/) + a small vision model such as `gemma4:e4b-it-qat` | automatic checks, reading Korean edit requests, writing plans locally |
 | NoobAI-XL V-Pred 1.0 ([Laxhar/noobai-XL-Vpred-1.0](https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0)) | legacy flow `--render noob`, `nk gen` |
 | Qwen-Image-Edit 2509 (fp8) + `qwen_2.5_vl_7b_fp8_scaled` | editing a cut with a sentence, adding props, merging two characters |

@@ -213,6 +213,37 @@ def _shape(ch):
     return SHAPES["female"] if ("1girl" in t or " woman" in t or " girl" in t) else SHAPES["male"]
 
 
+def _faceless_of(cut, ch):
+    """이 사람(캐릭터)의 얼굴이 칸 밖인가 — 두 명 컷은 roles 의 그 사람 pos, 혼자 컷은 컷 태그(scene)에 'head out of frame' / 'face out of frame'.
+    인형 머리가 깊이 그림에 보이면 얼굴이 그려짐 -> 그 사람 인형은 머리 없이 (shape no_head, tools/pose3d/render.doll_parts)."""
+    import re
+    pat = r"(head|face) out of frame"
+    roles = cut.get("_roles") or []
+    if roles:
+        return any(c is ch and re.search(pat, str(r.get("pos") or "").lower()) for r, c in roles)
+    return re.search(pat, str(cut.get("scene") or "").lower()) is not None
+
+
+def _neck_vs_head(res, fl, H2):
+    """(머리 없는 사람 목의 세로 위치(가장 위), 머리 보이는 사람 머리 꼭대기 세로 위치(가장 위)) — 몸 전체를 찍은 그림 기준. 못 구하면 None"""
+    import numpy as np
+    try:
+        necks = [float(np.asarray(res["kps"][i][0], float)[1][1]) for i, f in enumerate(fl) if f]
+        tops = []
+        for j, f in enumerate(fl):
+            if f:
+                continue
+            m = np.asarray(res["masks"][j])
+            ys = np.where(m.reshape(m.shape[0], -1).any(axis=1))[0]
+            if len(ys):
+                tops.append(float(ys.min()))
+        if necks and tops:
+            return min(necks), min(tops)
+    except Exception as e:
+        print("[pose3d] 머리 없는 사람 높이 비교 실패 (%s) — 건너뜀" % e)
+    return None
+
+
 def _look_at(d, target, limit=60.0):
     """인형 고개(neck)를 target 쪽으로 돌림 (골반 기준 좌우 각도, ±limit 도)"""
     import math
@@ -239,11 +270,11 @@ def depth_for(kit, ep, cut, w, h, save=True):
     if left:                                               # 두 명: 키 비율 (큰 사람 = 1.0)
         ha, hb = _height(right), _height(left)
         top = max(ha, hb)
-        s["people"] = {"a": {"scale": ha / top, "shape": dict(_shape(right), no_arms=stand_a)},
-                       "b": {"scale": hb / top, "shape": dict(_shape(left), no_arms=stand_b)}}
+        s["people"] = {"a": {"scale": ha / top, "shape": dict(_shape(right), no_arms=stand_a, no_head=_faceless_of(cut, right))},
+                       "b": {"scale": hb / top, "shape": dict(_shape(left), no_arms=stand_b, no_head=_faceless_of(cut, left))}}
     else:
-        s["people"] = {"a": {"scale": 1.0, "shape": dict(_shape(right), no_arms=stand_a)},
-                       "b": {"scale": 1.0, "shape": dict(_shape(right), no_arms=stand_b)}}
+        s["people"] = {"a": {"scale": 1.0, "shape": dict(_shape(right), no_arms=stand_a, no_head=_faceless_of(cut, right))},
+                       "b": {"scale": 1.0, "shape": dict(_shape(right), no_arms=stand_b, no_head=_faceless_of(cut, right))}}
     s["camera"]["margin"] = 1.0
     s["body"]["upper_arms_only"] = False                   # 팔은 사람마다 no_arms 로 (남기면 손까지 전체, 빼면 전부)
     yaw, pitch = CAM[str(cut.get("angle") or "eye")]
@@ -277,14 +308,31 @@ def depth_for(kit, ep, cut, w, h, save=True):
     frac = CROP.get(str(cut.get("shot") or ""), 1.0)
     H2 = int(int(h) / frac)
     res = build(pose, s, yaw, pitch, None, 35, int(w), H2)
-    def _fit(a):                                       # 가까운 구도: 위쪽 h 만 (몸 전체를 찍은 그림에서)
-        return Image.fromarray(a).crop((0, 0, int(w), int(h))) if H2 != int(h) else Image.fromarray(a)
+    y0 = 0
+    if left and H2 != int(h):
+        # 가까운 두 명 컷에서 얼굴이 칸 밖인 사람만 머리가 없으면, 목 위 기둥이 칸 맨 위까지 이어져 몸통이 끝없이 길어 보임
+        fl = [bool(s["people"]["a"]["shape"].get("no_head")), bool(s["people"]["b"]["shape"].get("no_head"))]
+        if any(fl) and not all(fl):
+            nv = _neck_vs_head(res, fl, H2)
+            if nv and nv[0] > nv[1] - 0.04 * H2:      # 가) 머리 없는 사람의 목이 상대 머리 꼭대기보다 아래 = 키가 비슷해 머리만 칸 밖으로 못 보냄 -> 그 사람을 크게(앞에 선 것처럼), 상대를 작게 다시
+                for i, f in enumerate(fl):
+                    sc = s["people"]["ab"[i]]
+                    sc["scale"] = float(sc["scale"]) * (1.12 if f else 0.92)
+                res = build(pose, s, yaw, pitch, None, 35, int(w), H2)
+                nv = _neck_vs_head(res, fl, H2)
+            if nv and nv[0] < nv[1] - 0.04 * H2:      # 나) 머리 없는 사람의 목이 상대 머리보다 한참 위 = 칸 맨 위(목·머리 자리)가 기둥뿐 -> 칸을 아래로 내려 자름
+                y0 = int(min(max(nv[1] - 0.08 * H2, 0), H2 - int(h)))
+    def _fit(a):                                       # 가까운 구도: 위쪽 h 만 (몸 전체를 찍은 그림에서). y0 > 0 이면 그만큼 내려서
+        return Image.fromarray(a).crop((0, y0, int(w), y0 + int(h))) if H2 != int(h) else Image.fromarray(a)
+    if y0:
+        import numpy as _np
+        res = dict(res, kps=[(_np.asarray(uv, float) - _np.array([0.0, float(y0)]), vis, inside, by) for (uv, vis, inside, by) in res["kps"]])
     im, ln = _fit(res["depth"]), _fit(res["lineart"])
     masks = [_fit(m) for m in res["masks"]]
     if mirror:
         im = im.transpose(Image.FLIP_LEFT_RIGHT); ln = ln.transpose(Image.FLIP_LEFT_RIGHT)
         masks = [m.transpose(Image.FLIP_LEFT_RIGHT) for m in masks]
-    depth_for.last_res = dict(res=res, w=int(w), h=int(h), H2=H2, mirror=mirror, yaw=yaw, pitch=pitch)
+    depth_for.last_res = dict(res=res, w=int(w), h=int(h), H2=H2, mirror=mirror, yaw=yaw, pitch=pitch, y0=y0)
     depth_for.last_kps = _doll_kps(res, int(w), int(h), mirror, masks)
     depth_for.last_pose = pose
     import nk_webtoon as W
@@ -300,7 +348,8 @@ def depth_for(kit, ep, cut, w, h, save=True):
     for tag, m in zip("ab", masks):
         if m.getbbox():
             m.filter(ImageFilter.MaxFilter(25)).filter(ImageFilter.GaussianBlur(6)).save(out.replace("_depth3d.png", "_mask_%s.png" % tag))
-    print("[pose3d] cut %s: %s (yaw %s, pitch %s%s) -> %s" % (cut.get("id"), pose, yaw, pitch, ", mirrored" if mirror else "", out))
+    print("[pose3d] cut %s: %s (yaw %s, pitch %s%s%s) -> %s" % (cut.get("id"), pose, yaw, pitch, ", mirrored" if mirror else "",
+                                                         (", 칸 %d px 아래로 (머리 없는 사람 목 위 기둥 줄임)" % y0) if y0 else "", out))
     return out
 
 
@@ -313,7 +362,7 @@ def _doll_kps(res, w, h, mirror, masks):
     for i, (uv, vis, inside, by) in enumerate(res["kps"]):
         k = [[float(x), float(y)] for x, y in uv]
         # 자기 몸 조각(무릎뼈·아랫배·큰 발)에 가린 관절도 '있음' (검사는 위치·방향만 봄) — 다른 사람에게 가린 것만 뺌
-        ok = [int(bool(inside[j]) and int(by[j]) in (-1, i) and k[j][1] < h) for j in range(len(k))]
+        ok = [int(bool(inside[j]) and int(by[j]) in (-1, i) and 0 <= k[j][1] < h) for j in range(len(k))]     # 0 이상: 칸을 아래로 내려 자른 컷(y0)은 위쪽이 칸 밖
         names = list(OP_NAMES)
         if mirror:
             k = [[w - 1 - x, y] for x, y in k]

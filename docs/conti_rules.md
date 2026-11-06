@@ -57,6 +57,7 @@ char: hero                               # 컷 기본 캐릭터. 컷에서 char:
 - 효과음 크기: text 항목에 `size: 56`
 - 아직 안 되는 것: 두 캐릭터 **모두** LoRA인 컷 / 3명 이상 / 위아래 배치(자리는 좌우 반씩만)
 - LoRA 캐릭터가 나오는 두 명 컷은 프로그램이 나눠 그린다 (LoRA 없이 전체 → LoRA 캐릭터 자리만 LoRA로 다시, `nk ep regionlora`).
+- LoRA 없는 두 명 컷도 나눠 그린다 (전체 → SAM3로 두 사람 자리 → 사람마다 자기 글로만 다시, `nk_duosplit`). Impact Pack이 없으면 예전처럼 한 번에. 끄기 = `duosplit_settings.yaml`의 `enabled: false` 또는 계획표에 `duo_split: off`.
 
 **scene에 쓰지 않는 것** (다른 칸이 대신 붙임):
 - 카메라(upper body, from above …) → `shot`·`angle`
@@ -92,6 +93,27 @@ char: hero                               # 컷 기본 캐릭터. 컷에서 char:
 - `flower pot` = 거의 늘 꽃이 핀 화분. 빈 화분은 `from above, flower pot, soil, dirt` + 부정 `potted plant, plant, petals`
 - `hat over eyes` + 캐릭터의 안경 태그 = 안경 속 눈이 그려짐 → 그 컷만 `char_drop`으로 안경 태그 빼기
 - `dirty face` = 흰 털에는 거의 안 보임. 이야기에 꼭 필요하면 쓰지 말 것
+
+### 영어 장면 문장 — 보이는 사람 한 명당 한 문장
+> plan.yaml 의 `scene`(예전 이름 `sentence`)은 콘티의 `anima_act` 로 들어가 Anima 글 끝에 붙는다. 콘티를 직접 고칠 때도 같은 규칙.
+> 예전 규칙 '장면 문장 2~3개 (한 문장이면 동작이 빠짐)'를 대체한다. 한 사람을 여러 문장에 나눠 쓰고 문장마다 그 사람의 겉모습 낱말을 되풀이하면
+> 모델이 그 사람을 둘로 읽어 한 컷에 같은 캐릭터가 두 명 그려졌다.
+
+- **한 사람 = 한 문장.** 혼자 컷 1문장, 두 명 컷 2문장 (사람마다 하나), 사람이 없는 풍경·소품 컷 1문장. 같은 사람을 두 문장 이상에 나눠 쓰지 않는다.
+- 한 문장 안에 그 사람의 **동작·시선·표정**을 다 담는다. 쉼표·대시(—)·분사(`looking …`)·`with`·`and` 로 잇는다. 길이 제한은 없다.
+- 문장은 그 사람의 **겉모습 낱말**로 시작한다 (`the fox boy …`, `the rabbit girl …`). 캐릭터 이름·옷 설명은 쓰지 않는다.
+- **두 명 컷**: 문장마다 그 사람 **자신의** 동작·시선·표정만 쓴다. 상대는 겉모습 낱말로만 가리키고 `he`·`his`·`her`·`him` 으로 상대를 가리키지 않는다. 상대의 동작을 내 문장에 넣지 않는다.
+- 두 문장은 **같은 한 순간**을 보여 준다. 한 사람은 가만히 있고 다른 사람에게만 사건이 일어나면 칸이 두 장면으로 갈라진다.
+- **얼굴이 칸 밖인 사람**은 그 문장에 동작 + `his face is out of frame` (또는 `her face is out of frame`) 만 쓴다.
+  그 사람의 태그(두 명 컷 = cast 의 `pos`, plan 의 roles / 혼자 컷 = 컷 `scene`, plan 의 action)에 `head out of frame` 을 넣으면
+  프로그램이 그 사람의 머리 묘사 태그·서로 보기 문장·3D 인형 머리를 빼고, 캐릭터 파일에 `anima_body`(머리 없는 몸 설명)가 있으면 그것을 쓴다.
+
+| | 예 |
+|---|---|
+| 좋음 (혼자) | `The fox boy kneels by the puddle, poking the water with one finger and staring at the ripples with wide, curious eyes.` |
+| 나쁨 (혼자) | `The fox boy kneels by the puddle. The fox boy pokes the water with one finger. He looks curious.` (한 사람이 세 문장 → 두 명으로 그려짐) |
+| 좋음 (두 명) | `The rabbit girl holds out a red apple with both hands, smiling at the fox boy. The fox boy reaches for the apple with his right hand, his eyes sparkling.` |
+| 나쁨 (두 명) | `The rabbit girl holds out an apple and he takes it happily.` (상대를 he 로, 상대의 동작이 내 문장에) |
 
 ---
 

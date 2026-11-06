@@ -27,6 +27,7 @@ anima: "A small anthro fox boy with orange fur, a white muzzle, green eyes, poin
 # anima_chest: "chest of ..."           # 가슴만 다시 그리기
 # anima_back: "seen from behind, ..."   # 뒷모습 컷
 # anima_eyes / anima_hands              # 눈만·손만 극근접 컷
+# anima_body: "body of ..., no head"     # 얼굴이 칸 밖인 컷(head out of frame)에서 머리 묘사 없이 쓰는 몸 설명 (없으면 anima 에서 머리 낱말을 뺌)
 
 # ---------- LoRA 캐릭터 (선택) — 직접 학습한 LoRA 가 있을 때 ----------
 # lora: mychar_v1.safetensors           # NoobAI 흐름 LoRA (ComfyUI models/loras)

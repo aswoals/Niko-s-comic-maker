@@ -44,3 +44,30 @@ def test_depth_for_writes_cut_size(tmp_path, monkeypatch):
     c = dict(duo("lying", "lying", "on bed"), shot="knee")
     out2 = P.depth_for(".", "ep", c, 320, 200)                                        # 가까운 구도 = 잘라 씀 (크기는 컷 그대로)
     assert Image.open(out2).size == (320, 200)
+
+
+def test_faceless_person_has_no_doll_head(tmp_path, monkeypatch):
+    """얼굴이 칸 밖인 사람(roles pos 'head out of frame') = 인형 머리·목 없이, 목 자리에서 위로 기둥 (깊이에 머리가 보이면 얼굴이 그려짐)"""
+    import sys
+    import nk_webtoon as W
+    sys.path.insert(0, os.path.join(P.KIT, "tools"))
+    from pose3d import render as R
+    monkeypatch.setattr(W, "ep_dir", lambda kit, ep: str(tmp_path))
+    c = duo("standing, head out of frame", "standing, smile", "grass", shot="knee")
+    assert P._faceless_of(c, HEATH) and not P._faceless_of(c, DON)
+    out = P.depth_for(".", "ep", c, 320, 200)
+    from PIL import Image
+    assert Image.open(out).size == (320, 200)
+    dolls = P.depth_for.last_res["res"]["dolls"]
+    flags = [bool(d.b.get("no_head")) for d in dolls]
+    assert sorted(flags) == [False, True]
+    for d in dolls:
+        names = [p[1] for p in R.doll_parts(d)]
+        if d.b.get("no_head"):
+            assert "head" not in names and "neck" not in names and "neck_up" in names and d.b.get("neck_up_len")
+        else:
+            assert "head" in names and "neck_up" not in names
+    solo = {"id": 5, "shot": "full", "angle": "eye", "scene": "solo, standing, face out of frame", "_char": HEATH}
+    assert P._faceless_of(solo, HEATH)
+    P.depth_for(".", "ep", solo, 200, 320)
+    assert all(d.b.get("no_head") for d in P.depth_for.last_res["res"]["dolls"])

@@ -117,16 +117,21 @@ def cut_text(nk, W, cfg, conti, cut, artist):
         if ch.get("anima"):
             d = shot_desc(ch, cut.get("shot"), back) or ch["anima"]
             d = drop_eyes(ch, d, str(r.get("pos", "")) if r else str(cut.get("scene", "")))
+            if ch.get("anima_body") and str(cut.get("shot") or "") != "hands" and faceless_pos(cut, r):
+                d = ch["anima_body"]      # 얼굴이 칸 밖인 사람: 머리·눈·귀 설명이 없는 몸 설명 (캐릭터 파일 anima_body, 없으면 그대로)
             if d != ch["anima"]:
                 text = text.replace(ch["anima"], d)
     shot = str(cut.get("shot") or "")
     if char_tags_on(conti) and pairs and shot != "hands":
         tags = [str(ch.get("trigger") or "").strip() for _, ch in pairs if ch and not ch.get("anima_lora")]
         if len(pairs) == 1 and pairs[0][1] and not pairs[0][1].get("anima_lora") and shot not in ("eyes", "face", "detail"):   # 혼자 컷은 핵심 태그(tags_full)까지 글에, 두 명 컷은 이름 태그만 (핵심 태그는 사람별 틀 글에). LoRA 캐릭터는 LoRA 가 모습을 맡음
-            tags.append(str(pairs[0][1].get("tags_full") or ""))
+            tf = str(pairs[0][1].get("tags_full") or "")
+            tags.append(headless_tags(tf) if faceless_pos(cut, None) else tf)      # 얼굴이 칸 밖이면 머리 묘사 태그(머리카락·눈·귀 …)는 뺌
         tg = _dedupe_tags(text, ", ".join(x for x in tags if x))
         if tg:
             text = text.replace("safe, ", "safe, %s, " % tg, 1) if "safe, " in text else "%s, %s" % (tg, text)
+    if len(pairs) == 1 and faceless_pos(cut, None):
+        text = re.sub(r"(cowboy shot|upper body), ", "", text)      # 혼자 컷 + 얼굴 칸 밖: 머리가 들어가는 구도 태그를 빼야 머리가 칸 안에 안 그려짐
     if gaze_on(conti, cut):
         text = text.replace("safe, ", "safe, looking at another, ", 1) if "safe, " in text else "looking at another, " + text
         if gaze_mode(conti) != "v2":
@@ -137,9 +142,9 @@ def cut_text(nk, W, cfg, conti, cut, artist):
         nm = lambda c: str((c or {}).get("compose_name") or "other character").replace("the ", "", 1)
         sents = []
         if gp[0]:
-            sents.append("The %s turns her head and looks directly at the %s, not at the viewer." % (nm(c1), nm(c2)))
+            sents.append(gaze_sentence(nm(c1), gaze_poss(c1), nm(c2)))
         if gp[1]:
-            sents.append("The %s turns her head and looks directly at the %s, not at the viewer." % (nm(c2), nm(c1)))
+            sents.append(gaze_sentence(nm(c2), gaze_poss(c2), nm(c1)))
         if sents:
             text = text.rstrip() + " " + " ".join(sents)
     if cut.get("anima_act"):          # 동작 문장 목록에 없는 동작을 컷에 직접 적음
@@ -160,6 +165,53 @@ def cut_text(nk, W, cfg, conti, cut, artist):
 def char_tags_on(conti):
     """콘티 char_tags: false 면 끔"""
     return str(conti.get("char_tags", True)).lower() not in ("false", "off", "none", "0")
+
+
+def gaze_sentence(who, poss, other):
+    """서로 보기 문장 하나 (두 명 컷, gaze v2)"""
+    return "The %s turns %s head and looks directly at the %s, not at the viewer." % (who, poss, other)
+
+
+_HIS = re.compile(r"\b(male|man|boy|his|he)\b")
+_HER = re.compile(r"\b(female|woman|girl|her|she)\b")
+
+
+def gaze_poss(ch):
+    """서로 보기 문장의 소유격 his / her / their. 예전엔 'her' 로 박혀 있어 남자 캐릭터에도 her 가 들어갔음.
+    캐릭터 파일의 성별 단서: 태그 1boy / 1girl 먼저, 없으면 글(tags_full·anima)의 male·man·boy·his·he -> his / female·woman·girl·her·she -> her / 단서 없음 -> their"""
+    ch = ch or {}
+    tags = " ".join(str(ch.get(k) or "") for k in ("tags_full", "tags_short")).lower()
+    if "1boy" in tags and "1girl" not in tags:
+        return "his"
+    if "1girl" in tags and "1boy" not in tags:
+        return "her"
+    t = tags + " " + str(ch.get("anima") or "").lower()
+    if _HIS.search(t):
+        return "his"
+    if _HER.search(t):
+        return "her"
+    return "their"
+
+
+def faceless(words):
+    """얼굴이 칸 밖인 사람인가 ('head out of frame' / 'face out of frame').
+    이런 사람에게도 '고개를 돌려 상대를 본다' 문장·머리 묘사·인형 머리를 붙여 얼굴이 그려지던 것"""
+    return re.search(r"(head|face) out of frame", str(words or "").lower()) is not None
+
+
+def faceless_pos(cut, r):
+    """이 사람 얼굴이 칸 밖인가: 두 명 컷 = 그 사람 roles pos, 혼자 컷(r 없음) = 컷 태그(scene)"""
+    return faceless(r.get("pos") if r else cut.get("scene"))
+
+
+# 머리 묘사 태그 (얼굴이 칸 밖인 사람의 핵심 태그에서 뺌). 'head out of frame' 과 'brown hair, green eyes, pointy ears' 가 한 글에 있으면 모델이 머리를 그려 넣음
+_HEAD_TAG = re.compile(r"\b(hair|ponytail|twintails|braids?|bangs|eyes?|eyebrows|ears?|muzzle|snout|beak|horns?|antlers|"
+                       r"glasses|eyewear|hat|headwear|fangs?|roots)\b", re.I)
+
+
+def headless_tags(tags):
+    """핵심 태그(쉼표 목록)에서 머리 묘사 태그를 뺌"""
+    return ", ".join(t.strip() for t in str(tags or "").split(",") if t.strip() and not _HEAD_TAG.search(t))
 
 
 GAZE_WORDS = ("looking", "closed eyes", "eyes closed", "sleeping", "wink")         # 이미 시선이 정해진 사람 ('half-closed eyes' 는 시선 아님)
@@ -195,7 +247,7 @@ def gaze_people(conti, cut):
         return [False, False]
     if any(k in scene for k in ("piggyback", "carrying", "princess carry", "shoulder carry", "chasing")):
         return [False, False]
-    return [not _gaze_word(str(r.get("pos") or "")) for r, _ in roles]
+    return [not _gaze_word(str(r.get("pos") or "")) and not faceless(r.get("pos")) for r, _ in roles]   # 얼굴이 칸 밖인 사람은 '고개를 돌려 본다' 없음
 
 
 def gaze_on(conti, cut):
@@ -302,7 +354,32 @@ def neg_for(conti):
     return NEG + ((", " + str(conti["anima_neg"]).strip().strip(",")) if conti.get("anima_neg") else "")
 
 
+def cut_neg(s, conti=None):
+    """이 컷의 부정 프롬프트 = neg_for (기본 NEG + 만화 전체 anima_neg) + 그 컷의 neg (plan.yaml 컷 neg:, 장소 neg).
+    예전엔 Anima 로 그릴 때 컷 neg 를 안 읽어서 계획표에 적은 부정어가 그림에 안 닿았음.
+    s = nk_pose._cut_prompt 가 돌려준 설정표 (컷·장소 neg 는 s['negative_extra'] 에 들어 있음). 이미 들어 있는 말은 한 번만 넣음"""
+    base = neg_for(conti or {})
+    have = {x.strip().lower() for x in base.split(",")}
+    add = []
+    for x in str((s or {}).get("negative_extra") or "").split(","):
+        k = x.strip().lower()
+        if k and k not in have:
+            have.add(k)
+            add.append(x.strip())
+    return base + ((", " + ", ".join(add)) if add else "")
+
+
 def run(nk, kit, args):
+    """ComfyUI 가 작업을 잃어버리면(ComfyJobError) traceback 없이 한국어로 알리고 멈춤 (nk_auto 처럼 이 함수를 바로 부를 때도)"""
+    try:
+        _run(nk, kit, args)
+    except RuntimeError as e:
+        if type(e).__name__ != "ComfyJobError":
+            raise
+        nk.comfy_job_failed(e)
+
+
+def _run(nk, kit, args):
     import nk_webtoon as W, nk_animatest
     cfg = nk.load_presets()
     conti = W.load_conti(nk, kit, args.ep)
@@ -330,7 +407,7 @@ def run(nk, kit, args):
         label = "cut%02d" % cid
         lora, lst = (None, None) if getattr(args, "nolora", False) else cut_lora(W, cut)
         vc = dict(v, lora=lora, lora_strength=lst) if lora else v
-        neg = neg_for(conti) + ((", " + args.neg_extra) if getattr(args, "neg_extra", None) else "")
+        neg = cut_neg(s, conti) + ((", " + args.neg_extra) if getattr(args, "neg_extra", None) else "")   # 컷 neg 도 (밑그림·다시 그리기도 이 neg)
         if any(gaze_people(conti, cut)) and "looking at viewer" not in str(cut.get("scene") or "").lower():
             neg += ", looking at viewer"
         if str(cut.get("shot")) == "hands":
@@ -385,13 +462,15 @@ def run(nk, kit, args):
                         rpos = next((str(r.get("pos") or "") for r, c2 in cut["_roles"] if c2 is chx), "")
                         sex = "1boy" if "1boy" in str(chx.get("tags_full", "")) else "1girl"
                         art = cut.get("anima_artist", artist)
+                        fl = faceless(rpos)                                   # 얼굴이 칸 밖인 사람: 머리 묘사 태그·문장 없이 (몸·옷만)
+                        tf = headless_tags(chx.get("tags_full")) if fl else str(chx.get("tags_full") or "").strip()
                         ctag = (", ".join(x for x in (str(chx.get("trigger") or "").strip() if not chx.get("anima_lora") else "",
-                                                      str(chx.get("tags_full") or "").strip()) if x) if (char_tags_on(conti) and not chx.get("anima_lora")) else "")
+                                                      tf) if x) if (char_tags_on(conti) and not chx.get("anima_lora")) else "")
                         gp = gaze_people(conti, cut)
                         look = "looking at another" if gp[[c2 for _, c2 in cut["_roles"]].index(chx)] else ""
                         head = ", ".join(x for x in ("masterpiece, best quality, score_7, safe", ("@" + art.lstrip("@")) if art else "",
                                                      str(conti.get("anima_tags") or ""), sex, "solo", ctag, look, rpos) if x)
-                        rtext = head + ". " + str(chx.get("anima") or chx.get("anima_upper") or "")
+                        rtext = head + ". " + str((chx.get("anima_body") if fl else None) or chx.get("anima") or chx.get("anima_upper") or "")
                         regs.append((W._upload_input(nk, cfg, mp, "pose3d_%s_cut%02d_mask_%s.png" % (args.ep, cid, tag), args.dry), rtext))
                 if len(regs) == 2:
                     vc = dict(vc, _regions=regs)

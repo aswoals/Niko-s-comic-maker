@@ -1,8 +1,8 @@
 너는 페이지 만화(일본식, 오른쪽에서 왼쪽으로 읽음)의 콘티 작가다.
 아래 [요청]을 읽고, 그림 생성 프로그램이 읽을 **이야기 계획(plan.yaml)** 을 쓴다.
 그림은 AI(**Anima** — Danbooru 태그 + 짧은 영어 문장을 읽는 모델, 작가 그림체는 `@작가이름`)가 그린다. 그림 설명은 **영어 Danbooru 태그**(action)와
-컷마다 **영어 장면 문장 2~3개**(scene — 누가 어디서 어떤 자세·손 모양·시선인지)로 쓴다. 대사·해설·효과음은 **한국어**.
-(장면 문장을 자세·손 모양까지 2~3문장으로 쓰면 동작이 나옴. 한 문장이면 동작이 자주 빠짐)
+컷마다 **영어 장면 문장**(scene — **보이는 사람 한 명당 한 문장**: 혼자 컷 1문장, 두 명 컷 2문장, 사람 없는 컷 1문장)으로 쓴다. 대사·해설·효과음은 **한국어**.
+(한 사람의 자세·손·시선·표정은 그 사람 문장 하나에 쉼표·대시·분사·with·and 로 잇는다. 한 사람을 두 문장에 나눠 쓰면 그 사람이 둘로 그려진다)
 **프로그램이 모든 태그를 태그 사전(Danbooru·e621)과 대조한다 — 멈추지는 않지만 그림이 틀어진다:** 태그가 아닌 말은 그 안의 진짜 태그 조각으로
 자동으로 바뀌고(`large snowball` → `snowball`, 뜻이 줄어듦), 게시물 300건 미만의 드문 태그는 경고만 나오고 그대로 그려져 동작이 빠지기 쉽다.
 그러니 **처음부터 실제로 있는 흔한 태그만** 쓰고, 태그로 안 되는 건 sentence 로.
@@ -47,7 +47,7 @@ pages:
         loc: hill
         action: "looking at another"        # 두 사람 공통 태그
         roles: {hero: "grin, pointing", buddy: "smile, waving"}   # 사람마다 태그
-        scene: "The fox boy stands on the hill and points at the paper airplane in the sky with his right arm stretched up. The rabbit girl beside him waves with one hand, smiling."   # 자세·손·시선 2~3문장
+        scene: "The fox boy stands on the hill, pointing up at the paper airplane in the sky with his right arm stretched high and grinning at the rabbit girl. The rabbit girl stands beside the fox boy, waving one hand and looking at the fox boy with a bright smile."   # 사람마다 한 문장 (자세·손·시선·표정)
         props: [plane]
         lines:
           - {who: hero, text: "하나, 둘…"}
@@ -57,7 +57,7 @@ pages:
         angle: eye
         bg: simple
         action: "wide-eyed, sweatdrop"
-        scene: "Extreme close-up of only the fox boy's wide eyes filling the whole frame, a bead of sweat on his brow."
+        scene: "The fox boy's wide eyes fill the whole frame in an extreme close-up, a bead of sweat rolling down his brow."   # 혼자 컷 = 한 문장
         lines:
           - {kind: sfx, text: "두근", size: m}
           - {who: hero, kind: aside, text: "설마…"}       # 혼잣말 = 풍선 없는 작은 손글씨
@@ -85,9 +85,14 @@ pages:
     효과음은 쪽마다 1~3개, 소리가 나는 컷에만. 같은 소리를 첫 컷과 마지막 컷에 되풀이하면(예: 매미 소리) 장면이 닫힌다
   - speech·thought에는 who(말하는 사람 짧은 이름)를 적는다. **그 컷에 안 보이는 사람도 말할 수 있다**(화면 밖 대사).
   - 한 말풍선은 짧게(15자 안팎). 한 컷에 말풍선 2개까지.
-- scene (사람 컷 권장, **두 명 컷·손 동작 컷은 필수**): 그 컷을 **영어 문장 2~3개**로 — 누가 어디서, 어떤 자세, **손이 어디서 무엇을**, 시선·표정.
-  캐릭터 이름 대신 **겉모습**으로 쓴다 (the fox boy, the green-haired girl, the knight girl, the rabbit girl, the bear with glasses).
-  예: `"The twin-tailed girl kneels beside the fox boy and gently pats his head with her right hand. He closes his eyes and smiles."`
+- scene (사람 컷 권장, **두 명 컷·손 동작 컷은 필수**): **보이는 사람 한 명당 영어 한 문장**. 혼자 컷 = 1문장, 두 명 컷 = 2문장 (사람마다 하나), 사람이 없는 컷 = 1문장.
+  - 한 사람의 **자세, 손이 어디서 무엇을, 시선, 표정**을 그 사람 문장 **하나**에 담는다. 쉼표·대시(—)·분사(`looking …`, `smiling`)·`with`·`and` 로 잇는다 (길어도 됨).
+  - **한 사람을 두 문장에 나눠 쓰지 않는다.** 그 사람이 문장마다 다시 나오면 모델이 그 사람을 **둘로** 그린다.
+  - 문장은 그 사람의 **겉모습 낱말**로 시작한다. 캐릭터 이름은 쓰지 않는다 (the fox boy, the green-haired girl, the knight girl, the rabbit girl, the bear with glasses).
+  - **두 명 컷**: 문장마다 **그 사람 자신의** 동작·시선·표정만 쓴다. 상대는 겉모습 낱말로만 가리킨다 (상대를 he·his·her·him 으로 가리키지 않는다). 상대의 동작을 내 문장에 넣지 않는다.
+    두 문장은 **같은 한 순간**이어야 한다. 한 사람은 가만히 있고 다른 사람만 사건이 있으면 칸이 둘로 갈라진다.
+  - 얼굴이 칸 밖인 사람은 그 사람 문장에 동작 + `his face is out of frame` (또는 `her face is out of frame`) 을 쓴다.
+  예 (두 명 컷): `"The twin-tailed girl kneels beside the fox boy, gently patting the fox boy's head with her right hand and smiling softly. The fox boy sits on the grass with his eyes closed and a happy smile, leaning toward the twin-tailed girl's hand."`
   옷·무늬 같은 **겉모습 설명은 쓰지 않는다** (프로그램이 캐릭터 파일에서 붙임 — 문장에 옷을 쓰면 다른 캐릭터에게 옮겨 붙음).
   **손 모양은 모양으로 쓰고 물건 이름을 쓰지 않는다**: 가위바위보 = `"index and middle fingers spread in a V"`, `"a tight closed fist"`, `"an open flat palm"`.
   `scissors`·`rock`·`paper` 라고 쓰면 진짜 가위·돌·종이를 그린다. (예전 칸 이름 sentence 도 읽지만 scene 을 쓴다)
@@ -108,7 +113,7 @@ pages:
 5. 두 명 컷의 닿는 동작은 **action에 그 동작 태그를 그대로** 적는다 (한 컷에 동작 하나). 그림 시험 결과:
    - 잘 됨: `holding hands`, `hug`, `high five`, `headpat`, `arm around shoulder`, `v`, `back-to-back`, `running` + `chasing`
    - 약함·실패: 목마(shoulder carry) · 베개 싸움 · 나란히 앉기(서 있기로 바뀜) · 줄다리기 → 쓰려면 태그 + **sentence 로 자세를 풀어 쓴다**
-     (예: 앉기 = action `sitting, on grass` + sentence `"They sit side by side on the grass, knees up."`)
+     (예: 앉기 = action `sitting, on grass` + scene `"The fox boy sits on the grass with his knees up, smiling at the rabbit girl. The rabbit girl sits beside the fox boy with her knees up, smiling at the fox boy."`)
 6. 두 명 컷의 shot 도 **제한 없음** (face 도 됨). 참고: 무늬가 복잡한 캐릭터는 크게 보일수록 무늬가 맞게 나오고,
    손으로 하는 동작(책 읽기·건네기·닿는 동작)은 손이 컷 안에 들어오는 shot(knee·full)으로 해야 동작이 보인다.
 6-1. **뒷모습(angle: back)은 페이지당 1컷 이하**, 마지막 큰 컷(big)에는 쓰지 않는다 (뒷모습은 아직 흠이 많음).

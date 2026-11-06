@@ -361,7 +361,7 @@ def run(nk, kit, args):
             v.update(ctl)
             if args.invert or args.split:           # 거꾸로·나눔: 기준 = LoRA 전체 (RegionalSampler 의 base 와 같은 모델·샘플러·시드)
                 v.update(lora=p["lora"], lora_strength=p["lora_strength"])
-            g = T.graph(v, text, A.neg_for(conti), w, h, seed, "nk/%s_regionlora/%s_base" % (to, nm))
+            g = T.graph(v, text, A.cut_neg(s, conti), w, h, seed, "nk/%s_regionlora/%s_base" % (to, nm))   # 컷·장소 neg 포함
             outs = c_.wait(c_.queue(g), nm + " base")
             ims = (outs.get("10") or {}).get("images") or []
             if not ims:
@@ -415,9 +415,9 @@ def run(nk, kit, args):
         # ③ 영역 LoRA
         if args.split:
             art = c.get("anima_artist", conti.get("artist", ""))
-            g = apply_control(split_graph(p, text, lora_region_text(ch, c, art), partner_text(text, c, conti), A.NEG, up, up_o, w, h, seed), ctl)
+            g = apply_control(split_graph(p, text, lora_region_text(ch, c, art), partner_text(text, c, conti), A.cut_neg(s, conti), up, up_o, w, h, seed), ctl)
         else:
-            g = apply_control(region_graph(p, text, ntext, A.NEG, up, w, h, seed, args.invert), ctl)
+            g = apply_control(region_graph(p, text, ntext, A.cut_neg(s, conti), up, w, h, seed, args.invert), ctl)
         g = speed_region(g)
         t0 = time.time()
         outs = c_.wait(c_.queue(g), nm)

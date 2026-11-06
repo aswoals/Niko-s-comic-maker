@@ -4,8 +4,9 @@
   nk ep aifile               -> AI_글콘티_만들기.md  (AI 채팅에 첨부하고 자유롭게 요청하면 계획표(plan.yaml)를 써 주는 안내서)
   nk ep paste <ep> [--go]      -> 복사해 둔 AI 답을 episodes/<ep>/plan.yaml 로 저장 + 검사. 고칠 점은 클립보드로 (AI 채팅에 다시 붙여 넣기)
                                   --go : 고칠 점이 없으면 바로 만화 만들기(nk ep auto)
-  nk ep fix <ep> <컷> [--add "태그"] [--remove "태그"] [--who 이름] [--nodraw]
+  nk ep fix <ep> <컷> [--add "태그"] [--remove "태그"] [--who 이름] [--edit-file 쪽지] [--nodraw]
                                -> 계획표의 그 컷 태그를 넣고/빼고 -> 콘티 다시 -> 그 컷만 새로 그림 -> 얼굴·그림체·글자까지 다시
+                                  --edit-file : 작업실이 적어 둔 문장 쪽지(동작 문장·보여줄 것)도 계획표에 반영 (새 시드로 그림)
 
 왜 따로 파일: 기존 명령(write/compile/redo/auto)을 사람이 순서대로 이어야 했던 것을 한 번에 묶는 '겉' 층. 안쪽 규칙은 그대로 씀."""
 import os, sys, re, time, glob, shutil, subprocess, json
@@ -100,7 +101,9 @@ SELF_CHECK = """# 내기 전 스스로 확인 (하나라도 어기면 고쳐서 
 4. 같은 shot 3컷 연속 없음. 장소의 첫 컷은 wide. 뒷모습(back)은 쪽당 1컷 이하.
 5. `action`·`roles` 는 영어 Danbooru 태그만 (문장 X). 가능하면 [자주 쓰는 태그]에서. 새 말을 만들지 않는다.
 6. `holding` 은 혼자 쓰지 않고 `holding 물건` + 그 물건을 `props` 에. 두 명 컷에선 드는 사람의 roles 에만.
-7. action·roles·scene 에 furry·anthro·1boy 같은 인원수 태그, 옷·무늬 말이 없다. scene 은 이름 대신 겉모습으로, 영어 2~3문장(자세·손·시선).
+7. action·roles·scene 에 furry·anthro·1boy 같은 인원수 태그, 옷·무늬 말이 없다.
+   scene 은 보이는 사람 한 명당 영어 한 문장 (혼자 컷 1, 두 명 컷 2, 사람 없는 컷 1). 문장은 그 사람의 겉모습 낱말로 시작하고 자세·손·시선·표정을 그 한 문장에 담는다.
+   한 사람을 두 문장에 나누지 않는다. 두 명 컷에선 상대를 he·his·her·him 이 아닌 겉모습 낱말로 쓰고, 상대의 동작은 넣지 않고, 두 문장이 같은 한 순간이다.
    손 모양은 모양으로 쓰고 물건 이름(scissors·rock)을 쓰지 않는다. chibi·over the shoulder·speed lines 태그를 쓰지 않는다.
 8. `artist` 는 [작가 목록]의 '쓸 작가' 중 하나 (요청에 작가가 없으면 목록의 첫 작가, 목록이 비면 쓰지 않음).
 9. 대사는 짧게(15자 안팎, 컷당 말풍선 2개까지), 캐릭터의 **성격·말투**대로. 마지막 컷은 이야기를 닫는 큰 컷(big: true).
@@ -257,6 +260,69 @@ def _edit_tags(text, add, remove):
     return ", ".join(out), added, gone
 
 
+# ---- 문장 고치기
+#   작업실 '태그·문장 고치기'가 컷의 영어 동작 문장(scene / sentence)·그림에 보여야 할 것(show)을 고치면
+#   그 글을 episodes/<ep>/cutedit_<컷>_<시각>.json 쪽지에 적어 두고 `nk ep fix <ep> <컷> --edit-file <쪽지 이름>` 을 작업 줄에 넣음.
+#   계획표는 이 명령이 돌 차례에 고침 (다른 그림 작업이 도는 동안 계획표를 건드리지 않으려고). 읽은 쪽지는 _cutedit_done 으로 옮김 (안 지움).
+#   에러가 나면: [쪽지를 못 찾음] -> 작업실에서 다시 '고쳐서 다시 그리기'. 고친 문장이 계획표 검사에서 막히면 계획표를 고치기 전으로 되돌림.
+EDIT_FILE_RE = re.compile(r"^cutedit_\d+_\d+\.json$")
+
+
+def _show_list(v):
+    """show 칸 -> 글 목록 (목록이면 그대로, 글이면 | 로 나눔)"""
+    if isinstance(v, list):
+        return [" ".join(str(x).split()) for x in v if str(x).strip()]
+    return [x.strip() for x in str(v or "").split("|") if x.strip()]
+
+
+def _load_edit(args, d):
+    """문장 쪽지 -> {'sentence': 글 또는 None(안 건드림), 'show': [글] 또는 None} 또는 None. 읽은 뒤 쪽지는 _cutedit_done 폴더로 옮김"""
+    nm = getattr(args, "edit_file", None)
+    if not nm:
+        return None
+    nm = os.path.basename(str(nm))
+    fp = os.path.join(d, nm)
+    if not EDIT_FILE_RE.match(nm) or not os.path.exists(fp):
+        print("[ERROR] 문장 고치기 쪽지를 못 찾음: %s" % fp); sys.exit(1)
+    try:
+        raw = json.load(open(fp, encoding="utf-8"))
+    except Exception as e:
+        print("[ERROR] 문장 고치기 쪽지를 못 읽음 (%s): %s" % (fp, e)); sys.exit(1)
+    out = {"sentence": None, "show": None}
+    if raw.get("sentence") is not None:
+        out["sentence"] = " ".join(str(raw["sentence"]).split())
+    if raw.get("show") is not None:
+        out["show"] = _show_list(raw["show"])
+    try:
+        os.makedirs(os.path.join(d, "_cutedit_done"), exist_ok=True)
+        shutil.move(fp, os.path.join(d, "_cutedit_done", nm))
+    except Exception:
+        pass
+    return out if (out["sentence"] is not None or out["show"] is not None) else None
+
+
+def _apply_text_edit(pc, edit):
+    """계획표 컷 pc 의 동작 문장(scene 이 있으면 scene, 없으면 sentence)·보여줄 것(show)을 바꿈 -> 바뀐 칸 이름 목록
+    (nk_plan 콘티 만들기: scene 이 sentence 보다 먼저 쓰임). 빈 글이면 그 칸을 뺌"""
+    done = []
+    if edit.get("sentence") is not None:
+        key = "scene" if pc.get("scene") else "sentence"
+        old = " ".join(str(pc.get(key) or "").split())
+        if edit["sentence"] != old:
+            if edit["sentence"]:
+                pc[key] = edit["sentence"]
+            else:
+                pc.pop("scene", None); pc.pop("sentence", None)
+            done.append(key)
+    if edit.get("show") is not None and edit["show"] != _show_list(pc.get("show")):
+        if edit["show"]:
+            pc["show"] = edit["show"]
+        else:
+            pc.pop("show", None)
+        done.append("show")
+    return done
+
+
 def run_fix(nk, kit, args):
     import yaml
     import nk_webtoon as W
@@ -267,49 +333,63 @@ def run_fix(nk, kit, args):
     remove = [t for t in re.split(r"[,，]", args.remove or "") if t.strip()]
     cid = int(args.cut)
     changed = False
-    if add or remove:
+    edit = _load_edit(args, d)        # 작업실의 문장 쪽지 (동작 문장·보여줄 것)
+    tchg = []                         # 문장 쪽에서 바뀐 칸 이름 (있으면 새 시드로 그림)
+    if add or remove or edit:
         if not os.path.exists(pp):
-            print("[ERROR] no plan.yaml in %s - 태그 고치기는 계획표가 있는 화만 (콘티를 손으로 쓴 화는 conti.yaml을 직접)" % d); sys.exit(1)
+            print("[ERROR] no plan.yaml in %s - 태그·문장 고치기는 계획표가 있는 화만 (콘티를 손으로 쓴 화는 conti.yaml을 직접)" % d); sys.exit(1)
         plan, _ = nk_plan._extract_yaml(open(pp, encoding="utf-8-sig").read())
         cuts = [pc for pg in plan.get("pages") or [] for pc in pg.get("cuts") or []]
         if not 1 <= cid <= len(cuts):
             print("[ERROR] cut %d: this episode has cuts 1-%d" % (cid, len(cuts))); sys.exit(1)
         pc = cuts[cid - 1]
         who = [w for w in (pc.get("who") or []) if w]
-        if getattr(args, "loc", False):
-            if not pc.get("loc") or pc["loc"] not in (plan.get("locations") or {}):
-                print("[ERROR] cut %d has no location (loc) in the plan" % cid); sys.exit(1)
-            where = "loc"
-        elif args.who:
-            if args.who not in who:
-                print("[ERROR] cut %d: '%s' is not in this cut (who: %s)" % (cid, args.who, who)); sys.exit(1)
-            if len(who) < 2:
-                where = "action"
+        added, gone, where = [], [], ""
+        if add or remove:
+            if getattr(args, "loc", False):
+                if not pc.get("loc") or pc["loc"] not in (plan.get("locations") or {}):
+                    print("[ERROR] cut %d has no location (loc) in the plan" % cid); sys.exit(1)
+                where = "loc"
+            elif args.who:
+                if args.who not in who:
+                    print("[ERROR] cut %d: '%s' is not in this cut (who: %s)" % (cid, args.who, who)); sys.exit(1)
+                if len(who) < 2:
+                    where = "action"
+                else:
+                    where = "roles." + args.who
             else:
-                where = "roles." + args.who
-        else:
-            where = "action"
-        if where == "loc":
-            plan["locations"][pc["loc"]], added, gone = _edit_tags(plan["locations"][pc["loc"]], add, remove)
-            where = "locations.%s" % pc["loc"]
-        elif where == "action":
-            pc["action"], added, gone = _edit_tags(pc.get("action"), add, remove)
-        else:
-            roles = pc.setdefault("roles", {})
-            roles[args.who], added, gone = _edit_tags(roles.get(args.who), add, remove)
-        missing = [r for r in remove if _norm(r) not in {_norm(g) for g in gone}]
-        print("cut %d %s: +%s -%s%s" % (cid, where, added or "[]", gone or "[]",
-                                        ("  (없어서 못 뺀 것: %s)" % missing) if missing else ""))
-        if not added and not gone:
+                where = "action"
+            if where == "loc":
+                plan["locations"][pc["loc"]], added, gone = _edit_tags(plan["locations"][pc["loc"]], add, remove)
+                where = "locations.%s" % pc["loc"]
+            elif where == "action":
+                pc["action"], added, gone = _edit_tags(pc.get("action"), add, remove)
+            else:
+                roles = pc.setdefault("roles", {})
+                roles[args.who], added, gone = _edit_tags(roles.get(args.who), add, remove)
+            missing = [r for r in remove if _norm(r) not in {_norm(g) for g in gone}]
+            print("cut %d %s: +%s -%s%s" % (cid, where, added or "[]", gone or "[]",
+                                            ("  (없어서 못 뺀 것: %s)" % missing) if missing else ""))
+        if edit:
+            tchg = _apply_text_edit(pc, edit)
+            print("cut %d 문장: %s" % (cid, (", ".join(tchg) + " 바뀜") if tchg else "바뀐 것 없음"))
+        if not added and not gone and not tchg:
             print("nothing changed in the plan")
         else:
             ts = time.strftime("%m%d_%H%M%S")
-            shutil.copy(pp, os.path.join(d, "plan_%s.bak.yaml" % ts))
+            bak = os.path.join(d, "plan_%s.bak.yaml" % ts)
+            shutil.copy(pp, bak)
             open(pp, "w", encoding="utf-8").write(
-                "# nk ep fix %s %d (%s): %s +%s -%s  (고치기 전: plan_%s.bak.yaml)\n"
-                % (args.ep, cid, time.strftime("%Y-%m-%d %H:%M"), where, added, gone, ts)
+                "# nk ep fix %s %d (%s): %s +%s -%s%s  (고치기 전: plan_%s.bak.yaml)\n"
+                % (args.ep, cid, time.strftime("%Y-%m-%d %H:%M"), where, added, gone, (" 문장 %s" % tchg) if tchg else "", ts)
                 + yaml.safe_dump(plan, allow_unicode=True, sort_keys=False, width=160))
-            nk_plan.run_compile(nk, kit, nk_plan.argparse_ns(ep=args.ep, dry=False, plan="plan.yaml"))
+            try:
+                nk_plan.run_compile(nk, kit, nk_plan.argparse_ns(ep=args.ep, dry=False, plan="plan.yaml"))
+            except BaseException:
+                if tchg:              # 고친 문장이 계획표 검사·콘티 만들기에서 막히면 계획표를 고치기 전으로 되돌림 (그림은 그대로)
+                    shutil.copy(bak, pp)
+                    print("[ERROR] 고친 문장이 계획표 검사·콘티 만들기에서 막혀서 계획표를 고치기 전으로 되돌렸음 (그림은 안 건드림)")
+                raise
             changed = True
     else:
         # 계획표를 손(메모장)으로 고친 뒤 태그 없이 fix 한 경우: 콘티가 계획표보다 옛것이면 다시 만듦
@@ -334,7 +414,7 @@ def run_fix(nk, kit, args):
     import nk_auto
     comp = nk_auto._compose_cuts(W, conti, nk_plan.argparse_ns(duo="compose"))
     if getattr(args, "render", "anima") == "anima":
-        if not changed:
+        if not changed or tchg:       # 글이 그대로(다시 그리기) 또는 문장을 고침 -> 이 컷만 시드를 옮겨 새로 그림 (태그만 고치면 시드 그대로)
             import nk_animacut
             n = nk_animacut.bump_reseed(args.ep, cid)
             print("새 시드로 다시 그림 (이 컷 %d번째 다시 그리기, 시드 +%d)" % (n, 1000 * n))
@@ -793,6 +873,7 @@ def add_parsers(esub, nk, kit):
     a.add_argument("--remove", help='tags to remove, e.g. "smile"')
     a.add_argument("--who", help="two-character cut: change only this person's tags (roles)")
     a.add_argument("--loc", action="store_true", help="change the background tags of this cut's location (shared by every cut in that place)")
+    a.add_argument("--edit-file", dest="edit_file", help="workshop note (episodes/<ep>/cutedit_*.json): new action sentence / show lines for this cut (redrawn with a new seed)")
     a.add_argument("--nodraw", action="store_true", help="only change the plan/conti, do not draw")
     a.set_defaults(func=lambda x: run_fix(nk, kit, x))
     a = esub.add_parser("cands", help="draw N new-seed candidates of one cut (final stays until you pick): nk ep cands <ep> <cut> --n 3")

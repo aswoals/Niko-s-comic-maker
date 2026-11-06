@@ -566,15 +566,28 @@ def facepass_save(d, done):
     os.replace(p + ".tmp", p)
 
 
+def _duosplit_on(nk, kit, W, ep, conti):
+    """LoRA 없는 두 명 컷을 나눠 그리나 -> (True/False, 이유).
+    끄기 = duosplit_settings.yaml 의 enabled: false, 또는 계획표·콘티의 duo_split: off (파일이 없거나 못 읽으면 켬)"""
+    import nk_duosplit
+    try:
+        return nk_duosplit.enabled(kit, conti, os.path.join(W.ep_dir(kit, ep), "plan.yaml"))
+    except Exception as e:
+        return True, "check failed: %s" % e
+
+
 def step_make_anima(nk, kit, W, args, conti, rec):
-    """Anima 흐름: 계획표의 컷을 한 번에 그림
-    ① 혼자 컷·사람 없는 컷·LoRA 캐릭터 없는 두 명 컷 = nk ep animamake (Anima 한 번에, 그 캐릭터 LoRA 는 혼자 컷에만)
+    """Anima 흐름: 계획표의 컷을 그림
+    ① 혼자 컷·사람 없는 컷 = nk ep animamake (Anima 한 번에, 그 캐릭터 LoRA 는 혼자 컷에만)
+    ①-2 LoRA 캐릭터 없는 두 명 컷 = nk_duosplit.run (나눠 그리기: 기준 그림 -> SAM3 두 사람 자리 -> 사람마다 자기 구역에서 자기 글로만
+       다시 그림 -> 두 사람 옷·생김새가 덜 섞임). 끄기 = duosplit_settings.yaml enabled: false 또는 계획표 duo_split: off.
+       끄거나 ComfyUI 에 Impact Pack 이 없으면 ① 처럼 한 번에 그림 (Impact Pack 이 없으면 경고 한 줄)
     ② LoRA 캐릭터가 나오는 두 명 컷 = nk ep regionlora --split (그 캐릭터 자리만 LoRA + 그 캐릭터 설명,
        밖 = LoRA 없음, 사람 상대는 furry·anthro 뺌 -> 상대에게 무늬·옷이 번지는 것을 줄임)
     ③ 이번에 새로 그린 컷 중 LoRA 캐릭터가 나오는 컷 = 얼굴만 한 번 더 (nk ep animafix --desc head 0.6, 원본은 _alt/preface)
     이미 있는 컷은 건너뜀 (다시 그리려면 컷을 _alt 로 옮기고 --from make)"""
     import shutil
-    import nk_animacut, nk_regionlora, nk_animafix
+    import nk_animacut, nk_regionlora, nk_animafix, nk_duosplit
     lk = _lora_key(conti)
     ids = [int(c["id"]) for c in conti["cuts"]]
     ed = W.ep_dir(kit, args.ep)
@@ -598,9 +611,17 @@ def step_make_anima(nk, kit, W, args, conti, rec):
         for c in conti["cuts"]:
             if c.get("cast") and lk in [str(r.get("char")) for r in c["cast"]]:
                 duo_lora.append(int(c["id"]))
-    rest = [i for i in ids if i not in duo_lora and i not in before]
-    todo_duo = [i for i in duo_lora if i not in before]
     notes, rc = [], 0
+    duo_nolora = [int(c["id"]) for c in conti["cuts"] if int(c["id"]) not in duo_lora and nk_duosplit.is_duo(c)]
+    if duo_nolora:
+        on, why = _duosplit_on(nk, kit, W, args.ep, conti)
+        if not on:                                      # 끔 -> 혼자 컷과 같은 길(animamake)로 한 번에
+            print("[note] duosplit off (%s) - two-character cuts %s are drawn in one pass" % (why, duo_nolora))
+            notes.append("duosplit off (%s): cuts %s drawn in one pass" % (why, duo_nolora))
+            duo_nolora = []
+    rest = [i for i in ids if i not in duo_lora and i not in duo_nolora and i not in before]
+    todo_duo = [i for i in duo_lora if i not in before]
+    todo_nolora = [i for i in duo_nolora if i not in before]
     d = nk_animacut.DEFAULT
     if rest:
         r1, _ = _call(nk_animacut.run, nk, kit, _ns(ep=args.ep, cuts=[str(i) for i in rest], unet=d["unet"], steps=d["steps"], cfg=d["cfg"],
@@ -614,6 +635,16 @@ def step_make_anima(nk, kit, W, args, conti, rec):
                                                        seed="500", redo=False, dry=args.dry, invert=False, split=True,
                                                        overlap_fix="subtract", covered_warn=0.0))
         notes.append("regionlora --split cuts %s rc %s" % (todo_duo, r2)); rc = rc or r2
+    if todo_nolora:                                     # 걸음·base_only·cfg 등은 duosplit_settings.yaml
+        got = {}                                        # Impact Pack 이 없으면 nk_duosplit.run 이 경고 한 줄을 내고 animamake 로 한 번에 그림
+        r4, _ = _call(lambda *a: got.update(nk_duosplit.run(*a) or {}), nk, kit,
+                      _ns(ep=args.ep, cuts=[str(i) for i in todo_nolora], unet=d["unet"], seed="500", force=False, dry=args.dry))
+        if got.get("one_pass"):
+            notes.append("duosplit skipped (no Impact Pack): cuts %s drawn in one pass rc %s" % (got["one_pass"], r4))
+        else:
+            notes.append("duosplit (no-LoRA two-character split) cuts %s rc %s%s" % (
+                todo_nolora, r4, (" - base kept for %s" % got["base_kept"]) if got.get("base_kept") else ""))
+        rc = rc or r4
     face = []
     if lk and not fp_on:
         notes.append("face pass off (characters: anima_face_pass false)")
@@ -772,6 +803,7 @@ def add_args(a):
     a.add_argument("--render", choices=["noob", "anima"], default="anima",
                    help="anima: 혼자·사람 없는 컷 = Anima 한 번에, LoRA 캐릭터가 나오는 두 명 컷 = "
                         "나눠 그리기(nk ep regionlora --split: LoRA 는 그 캐릭터 자리에만), 그 캐릭터 얼굴만 한 번 더(nk ep animafix 0.6). "
+                        "LoRA 없는 두 명 컷도 나눠 그리기(nk_duosplit, duosplit_settings.yaml). "
                         "noob = 예전 NoobAI 흐름")
     a.add_argument("--duo", choices=["compose", "draw", "layer"], default="compose",
                    help="two-character cuts: compose = combine the two characters' solo pictures / draw = old MB way / "

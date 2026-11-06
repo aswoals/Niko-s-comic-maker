@@ -100,6 +100,7 @@ class App:
         self.priv = PrivateWorker(self)
         self.labels = Labels(self)
         self.ab = ABSets(self)
+        self.pauser = Pauser(self)                  # ⏸ 전부 잠깐 멈춤 / ▶ 다시 시작
 
     def _load_folders(self):
         try:
@@ -728,9 +729,13 @@ class App:
             for nme in pc.get("props") or []:
                 v = props.get(nme)
                 pr[str(nme)] = _split(v.get("tags") if isinstance(v, dict) else v)
+            # 문장 고치기 칸용: 동작 문장 = scene 이 있으면 scene, 없으면 sentence (콘티 만들기와 같은 순서) / show = 한 줄에 하나
             return {"common": _split(pc.get("action")), "roles": {str(k): _split(v) for k, v in (pc.get("roles") or {}).items()},
                     "loc": pc.get("loc"), "loc_tags": _split(locs.get(pc.get("loc"))), "props": pr,
-                    "sentence": pc.get("sentence") or "", "who": [str(w) for w in (pc.get("who") or []) if w]}
+                    "sentence": pc.get("scene") or pc.get("sentence") or "", "sentence_key": "scene" if pc.get("scene") else "sentence",
+                    "show": ([str(x).strip() for x in pc["show"] if str(x).strip()] if isinstance(pc.get("show"), list)
+                             else [x.strip() for x in str(pc.get("show") or "").split("|") if x.strip()]),
+                    "who": [str(w) for w in (pc.get("who") or []) if w]}
         if os.path.exists(os.path.join(d, "plan.yaml")):
             try:
                 plan = self.nk.load_yaml(os.path.join(d, "plan.yaml"))
@@ -767,6 +772,7 @@ class App:
             cmp_ = os.path.join(ud, "cut%02d_cmp.png" % cid)
             return {"cands": cands, "use": use or 0, "orig": rel(orig) if os.path.exists(orig) else None,
                     "cmp": rel(cmp_) if os.path.exists(cmp_) else None, "flags": r.get("flags") or []}
+        rec_am, rec_rl = _jload(os.path.join(d, "animamake.json")), _jload(os.path.join(d, "regionlora.json"))
         cuts = []
         for pi, pg in enumerate(conti.get("pages") or [], 1):
             for ct in pg.get("cuts") or []:
@@ -785,8 +791,9 @@ class App:
                 cuts.append({"id": cid, "page": pi, "shot": ct.get("shot"), "scene": ct.get("scene"),
                              "who": [w for w in who if w], "duo": bool(ct.get("cast")),
                              "action": pc.get("action") if pc else ct.get("note"), "roles": pc.get("roles") if pc else None,
-                             "tags": cut_tags(pc),
+                             "tags": cut_tags(pc), "used": used_prompt(cid, rec_am, rec_rl),
                              "lines": [t.get("text") for t in ct.get("text") or []],
+                             "items": _lines_items(ct),
                              "img": rel(img) if img else None, "raw": rel(raw) if os.path.exists(raw) else None,
                              "mtime": os.path.getmtime(img) if img else 0, "flags": flags.get(cid, []),
                              "unify": unify_info(cid) if ct.get("cast") else None,
@@ -801,6 +808,56 @@ class App:
                 "pages": [rel(p) for p in pages], "pdf": rel(pdf) if os.path.exists(pdf) else None,
                 "state": state, "cuts": cuts, "has_plan": bool(plan_cuts), "has_conti": bool(conti),
                 "review": rel(rvp) if os.path.exists(rvp) else None, "error": conti.get("_error")}
+
+    # ------------------------------------------------------------ 대사 고치기
+    def lines_busy(self, ep, rid):
+        """그 만화를 지금 만드는 작업이 도는 중이면 설명 문장, 아니면 ''. 도는 작업의 명령은 그 작업 기록(log) 첫 줄에서 읽음"""
+        rid = str(rid)
+        run = []
+        if self.priv.cur:
+            run.append((str(self.priv.cur), str(self.priv.cur_root)))
+        if self.worker is not None and self.worker.cur:
+            run.append((str(self.worker.cur), "0"))
+        if self.has_runner:
+            try:
+                st = self.runner_status()
+                if st.get("alive") and st.get("job"):
+                    run.append((str(st["job"]), "0"))
+            except Exception:
+                pass
+        for jid, crid in run:
+            if crid != rid:
+                continue
+            args = self._job_args(jid, crid)
+            if not args:
+                return "지금 도는 작업이 어느 만화인지 확인이 안 돼서 안전하게 막았어요"
+            if ep in args:
+                return "지금 이 만화(%s)를 만드는 작업이 도는 중이에요" % ep
+        return ""
+
+    def lines_save(self, b):
+        """화면의 '대사 고치기' 저장 -> nk_lines.save. letter 가 참이면 '말풍선 다시' 작업도 줄에 넣음"""
+        rid = str(b.get("root") or "0")
+        self.base(rid)
+        ep = str(b.get("ep") or "")
+        if not EP_RE.match(ep) or not os.path.isdir(self.ep_dir(ep, rid)):
+            raise ValueError("그 만화 폴더가 없음")
+        try:
+            cid = int(b.get("cut"))
+        except (TypeError, ValueError):
+            raise ValueError("컷 번호가 이상함")
+        ed = b.get("edits")
+        if not isinstance(ed, list) or not ed or len(ed) > 80:
+            raise ValueError("고칠 대사가 없음")
+        why = self.lines_busy(ep, rid)
+        if why:
+            raise ValueError(why + " — 끝난 뒤에 고쳐 주세요 (도는 작업이 이미 읽은 글과 어긋나지 않게)")
+        import nk_lines
+        res = nk_lines.save(self.ep_dir(ep, rid), cid, ed)
+        if b.get("letter") and res.get("changed"):
+            args, note, jrid = self.make_job({"kind": "letter", "ep": ep, "root": rid})
+            res["job"] = self.add_job(args, note + " (대사를 고친 뒤)", jrid)
+        return res
 
     # ------------------------------------------------------------ 그림 파일 (고른 폴더의 episodes/runs 안만)
     def image(self, rel, w=None, rid="0"):
@@ -829,6 +886,44 @@ class App:
             if th:
                 return open(th, "rb").read(), "image/jpeg"
         return open(p, "rb").read(), IMG_EXT[ext]
+
+    # ------------------------------------------------------------ 문장 고치기 쪽지 (태그·문장 고치기 -> nk ep fix --edit-file)
+    SENTENCE_MAX = 3000          # 동작 문장 최대 글자 수
+    SHOW_MAX_LINES = 20          # '그림에 보여야 할 것' 최대 줄 수
+    SHOW_LINE_MAX = 500          # '그림에 보여야 할 것' 한 줄 최대 글자 수
+
+    def _text_edit_note(self, b, ep, rid, cid):
+        """화면에서 온 edit {sentence, show} -> episodes/<ep>/cutedit_<컷>_<시각>.json 쪽지를 쓰고 그 이름. 고친 게 없으면 ''"""
+        pay, ed = {}, b.get("edit")
+        if isinstance(ed, dict):
+            if ed.get("sentence") is not None:
+                s1 = re.sub(r"\s+", " ", str(ed["sentence"])).strip()
+                if len(s1) > self.SENTENCE_MAX:
+                    raise ValueError("동작 문장이 너무 길어요 (%d자까지)" % self.SENTENCE_MAX)
+                pay["sentence"] = s1
+            if ed.get("show") is not None:
+                sh = ed["show"] if isinstance(ed["show"], list) else str(ed["show"]).split("\n")
+                sh = [x for x in (re.sub(r"\s+", " ", str(x)).strip() for x in sh) if x]
+                if len(sh) > self.SHOW_MAX_LINES or any(len(x) > self.SHOW_LINE_MAX for x in sh):
+                    raise ValueError("'그림에 보여야 할 것'이 너무 많거나 깁니다 (%d줄·줄마다 %d자까지)"
+                                     % (self.SHOW_MAX_LINES, self.SHOW_LINE_MAX))
+                pay["show"] = sh
+        if not pay:
+            return ""
+        if cid < 1:
+            raise ValueError("컷 번호가 이상함")
+        edp = self.ep_dir(ep, rid)
+        if not os.path.isdir(edp):
+            raise ValueError("그 만화 폴더가 없음")
+        ms = int(time.time() * 1000)
+        fn = "cutedit_%02d_%s%03d.json" % (cid, time.strftime("%m%d%H%M%S"), ms % 1000)
+        while os.path.exists(os.path.join(edp, fn)):          # 같은 순간에 두 번 눌러도 쪽지가 덮어써지지 않게
+            ms += 1
+            fn = "cutedit_%02d_%s%03d.json" % (cid, time.strftime("%m%d%H%M%S"), ms % 1000)
+        with open(os.path.join(edp, fn + ".tmp"), "w", encoding="utf-8") as f:
+            json.dump(pay, f, ensure_ascii=False)
+        os.replace(os.path.join(edp, fn + ".tmp"), os.path.join(edp, fn))
+        return fn
 
     # ------------------------------------------------------------ 작업
     def make_job(self, b):
@@ -867,7 +962,17 @@ class App:
                 if not EP_RE.match(who):
                     raise ValueError("이름이 이상함: %s" % who)
                 args += ["--who", who]
-            return args, "%s %d번 컷 %s" % (ep, cid, ("태그 고치기 +[%s] -[%s]%s" % (add, rem, " (배경)" if b.get("where") == "loc" else (" (%s)" % who if who else ""))) if (add or rem) else "다시 그리기"), rid
+            # 문장 고치기: 동작 문장·그림에 보여야 할 것.
+            #   글은 쪽지 파일에 적어 두고, 그 컷 고치기 작업이 돌 차례에 계획표에 반영 (nk_easy._load_edit — 도는 작업 중에 계획표를 안 건드리게)
+            pay = self._text_edit_note(b, ep, rid, cid)
+            if pay:
+                args += ["--edit-file", pay]
+            lab = []
+            if add or rem:
+                lab.append("태그 고치기 +[%s] -[%s]%s" % (add, rem, " (배경)" if b.get("where") == "loc" else (" (%s)" % who if who else "")))
+            if pay:
+                lab.append("문장 고치기")
+            return args, "%s %d번 컷 %s" % (ep, cid, " · ".join(lab) if lab else "다시 그리기"), rid
         if kind == "partfix":
             cid, who, part = int(b.get("cut")), str(b.get("who") or ""), str(b.get("part") or "")
             if not EP_RE.match(who) or part not in ("head", "hand", "chest", "tail", "ear", "foot"):
@@ -1358,6 +1463,289 @@ def _run_nk(kit, args, log_path, env_extra=None, on_start=None):
     return p.returncode
 
 
+# ---------------------------------------------------------------- 전부 잠깐 멈춤 (게임 등 다른 일에 그래픽카드를 비워 줄 때)
+# 무엇: '⏸ 전부 잠깐 멈춤' = ① 새 작업을 안 시작 ② 이 작업실이 돌리는 작업(nk.py 와 그 자식 파이썬)을 그 자리에서 얼림 (그리던 컷도 안 버림)
+#        ③ ComfyUI 가 이미 받아 둔 그림을 마저 그리면 ComfyUI·Ollama 모델을 그래픽카드 메모리에서 내림.
+#       '▶ 다시 시작' = 얼린 프로세스를 그 자리에서 이어 감. 모델은 다음 그림 때 다시 올라가서 첫 장만 조금 느림.
+# 어떻게: 얼리는 것은 작업실 일꾼이 켠 프로세스와 그 자식·손자 중 파이썬만 (다른 프로그램은 절대 안 건드림).
+#        윈도우 = 프로세스 일시 정지(NtSuspendProcess) / 리눅스·맥 = SIGSTOP·SIGCONT 신호. 둘 다 안 되면 새 작업만 안 시작.
+#        멈춘 상태는 _remote/PAUSED 파일에 남음 -> 작업실을 껐다 켜도 멈춘 채 ('다시 시작'을 눌러야 돎).
+# 에러가 나면: 멈춘 채로 안 풀리면 작업실 검은 창을 닫고 _remote/PAUSED 파일을 지운 뒤 다시 켜기.
+#        (윈도우) 그래도 작업이 안 움직이면 작업 관리자에서 멈춘 python.exe 를 끝내고 그 작업을 '이어서 시작'.
+PAUSE_COMFY_WAIT = 900      # ComfyUI 가 받아 둔 그림을 마저 그리길 기다리는 최대 초 (넘으면 그냥 모델 내리기를 요청)
+PAUSE_COMFY_PORTS = (8188, 8189, 8000, 8190, 8191)   # ComfyUI 를 찾는 자리 (services() 와 같은 순서)
+PAUSE_OLLAMA_URL = "http://127.0.0.1:11434"          # 검수 AI(Ollama) 주소
+
+
+def _win_procs():
+    """윈도우 프로세스 목록 {pid: (부모 pid, 실행 파일 이름 소문자)}. 못 읽으면 {}"""
+    if os.name != "nt":
+        return {}
+    out = {}
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PE(ctypes.Structure):
+            _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD), ("th32ProcessID", wintypes.DWORD),
+                        ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                        ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                        ("szExeFile", ctypes.c_wchar * 260)]
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        k.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PE)]
+        k.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PE)]
+        k.Process32FirstW.restype = k.Process32NextW.restype = wintypes.BOOL
+        k.CloseHandle.argtypes = [wintypes.HANDLE]
+        snap = k.CreateToolhelp32Snapshot(0x2, 0)              # TH32CS_SNAPPROCESS
+        if not snap or snap == ctypes.c_void_p(-1).value:
+            raise OSError("process snapshot failed")
+        try:
+            e = PE()
+            e.dwSize = ctypes.sizeof(PE)
+            ok = k.Process32FirstW(snap, ctypes.byref(e))
+            while ok:
+                out[int(e.th32ProcessID)] = (int(e.th32ParentProcessID), str(e.szExeFile).lower())
+                ok = k.Process32NextW(snap, ctypes.byref(e))
+        finally:
+            k.CloseHandle(snap)
+    except Exception:
+        try:                                                    # 예비: PowerShell (느리지만 같은 정보)
+            r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId) $($_.Name)\" }"],
+                               capture_output=True, text=True, timeout=30)
+            for ln in r.stdout.splitlines():
+                a = ln.split(None, 2)
+                if len(a) == 3 and a[0].isdigit() and a[1].isdigit():
+                    out[int(a[0])] = (int(a[1]), a[2].strip().lower())
+        except Exception:
+            return {}
+    return out
+
+
+def _posix_procs():
+    """리눅스·맥 프로세스 목록 {pid: (부모 pid, 실행 파일 이름 소문자)} — ps 명령으로. 못 읽으면 {}"""
+    out = {}
+    try:
+        r = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,comm="], capture_output=True, text=True, timeout=20)
+        for ln in r.stdout.splitlines():
+            a = ln.split(None, 2)
+            if len(a) == 3 and a[0].isdigit() and a[1].isdigit():
+                out[int(a[0])] = (int(a[1]), os.path.basename(a[2].strip()).lower())     # 맥은 comm 이 전체 경로
+    except Exception:
+        return {}
+    return out
+
+
+def _procs():
+    return _win_procs() if os.name == "nt" else _posix_procs()
+
+
+def _job_tree(pid):
+    """작업 프로세스와 그 자식·손자 중 파이썬만 [(pid, 이름)] (다른 프로그램은 절대 안 얼림)"""
+    procs = _procs()
+    out, todo, seen = [], [int(pid)], set()
+    while todo:
+        p = todo.pop()
+        if p in seen or not p:
+            continue
+        seen.add(p)
+        exe = (procs.get(p) or (0, ""))[1]
+        if exe.startswith("python"):
+            out.append((p, exe))
+        todo += [c for c, (pp, _) in procs.items() if pp == p and c != p]
+    return out
+
+
+def _win_suspend(pid, on):
+    """윈도우: 프로세스 하나를 얼림(on=True) / 풂. 성공하면 True"""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        nt = ctypes.WinDLL("ntdll")
+        k.OpenProcess.restype = wintypes.HANDLE
+        k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k.CloseHandle.argtypes = [wintypes.HANDLE]
+        fn = nt.NtSuspendProcess if on else nt.NtResumeProcess
+        fn.argtypes = [wintypes.HANDLE]
+        fn.restype = ctypes.c_long
+        h = k.OpenProcess(0x0800, False, int(pid))             # PROCESS_SUSPEND_RESUME
+        if not h:
+            return False
+        try:
+            return fn(h) == 0
+        finally:
+            k.CloseHandle(h)
+    except Exception:
+        return False
+
+
+def _suspend(pid, on):
+    """프로세스 하나를 얼림(on=True) / 풂. 윈도우 = 일시 정지, 리눅스·맥 = SIGSTOP / SIGCONT. 성공하면 True (실패해도 안 멈춤)"""
+    if os.name == "nt":
+        return _win_suspend(pid, on)
+    try:
+        import signal
+        sig = getattr(signal, "SIGSTOP" if on else "SIGCONT", None)
+        if sig is None:
+            return False
+        os.kill(int(pid), sig)
+        return True
+    except Exception:
+        return False
+
+
+class Pauser:
+    """⏸ 전부 잠깐 멈춤 / ▶ 다시 시작 (위 설명)"""
+    def __init__(self, app):
+        self.app = app
+        self.path = os.path.join(app.box, "PAUSED")
+        self.lock = threading.RLock()
+        self.since, self.frozen, self.msg, self.gpu = None, {}, "", ""
+        self._keeper = None
+        try:                                                    # 작업실을 껐다 켜도 멈춘 채로
+            d = json.load(open(self.path, encoding="utf-8"))
+            self.since = float(d.get("since") or time.time())
+            self.frozen = {int(k): str(v) for k, v in (d.get("pids") or {}).items()}
+            self.msg = "멈춤 (작업실을 다시 켜기 전부터)"
+        except Exception:
+            pass
+        if self.on:
+            self._start_keep()
+
+    @property
+    def on(self):
+        return self.since is not None
+
+    def state(self):
+        if not self.on:
+            return {"on": False}
+        return {"on": True, "mins": int((time.time() - self.since) // 60), "msg": self.msg, "gpu": self.gpu, "frozen": len(self.frozen)}
+
+    def _save(self):
+        try:
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump({"since": self.since, "pids": {str(k): v for k, v in self.frozen.items()}, "at": _now()}, f)
+        except Exception:
+            pass
+
+    def _workers(self):
+        return [w for w in (self.app.worker, self.app.priv) if w]
+
+    def _freeze(self):
+        """도는 작업(두 일꾼)의 프로세스를 얼림. 이미 얼린 것은 건너뜀 -> 새로 얼린 개수"""
+        n = 0
+        for w in self._workers():
+            p = getattr(w, "proc", None)
+            if p is None or p.poll() is not None:
+                continue
+            for pid, exe in _job_tree(p.pid):
+                if pid not in self.frozen and _suspend(pid, True):
+                    self.frozen[pid] = exe
+                    n += 1
+        if n:
+            self._save()
+        return n
+
+    def _start_keep(self):
+        if self._keeper is None or not self._keeper.is_alive():
+            self._keeper = threading.Thread(target=self._keep, daemon=True)
+            self._keeper.start()
+
+    def _keep(self):
+        """멈춘 동안 2초마다: 멈춤을 누르는 순간에 막 시작한 작업·새 자식도 얼림 (다시 시작하면 끝남)"""
+        while self.on:
+            time.sleep(2)
+            try:
+                with self.lock:
+                    if self.on:
+                        self._freeze()
+            except Exception:
+                pass
+
+    def pause(self):
+        with self.lock:
+            if self.on:
+                return "이미 멈춰 있음"
+            self.since, self.gpu = time.time(), "그래픽카드 비우는 중"
+            self._save()
+            n = self._freeze()
+            busy = any(getattr(w, "cur", None) for w in self._workers())
+            if busy and not n:
+                self.msg = "멈춤 — 도는 작업을 얼리지 못함 (이 OS·권한에서는 안 됨: 그 작업은 계속 돎, 새 작업만 안 시작)"
+            else:
+                self.msg = "멈춤 — " + ("도는 작업을 그 자리에서 얼림" if n else "새 작업을 안 시작함")
+            since = self.since
+            self._start_keep()
+        threading.Thread(target=self._free_gpu, args=(since,), daemon=True).start()
+        return self.msg + ". ComfyUI 가 받아 둔 그림을 마저 그리면 그래픽카드 메모리를 비움 (보통 몇 분 안)"
+
+    def _free_gpu(self, since):
+        base = None
+        for port in PAUSE_COMFY_PORTS:
+            try:
+                urllib.request.urlopen("http://127.0.0.1:%d/system_stats" % port, timeout=2).read()
+                base = "http://127.0.0.1:%d" % port
+                break
+            except Exception:
+                continue
+
+        def post(url, data, t):
+            try:
+                req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=t).read()
+            except Exception:
+                pass
+        if base:
+            t0 = time.time()
+            while self.since == since and time.time() - t0 < PAUSE_COMFY_WAIT:
+                try:
+                    q = json.loads(urllib.request.urlopen(base + "/queue", timeout=5).read().decode("utf-8"))
+                    left = len(q.get("queue_running") or []) + len(q.get("queue_pending") or [])
+                except Exception:
+                    left = 0
+                if not left:
+                    break
+                self.gpu = "ComfyUI 가 받아 둔 그림 %d장을 마저 그리는 중 (끝나면 그래픽카드 비움)" % left
+                time.sleep(3)
+            if self.since != since:
+                return
+            post(base + "/free", {"unload_models": True, "free_memory": True}, 30)
+        try:                                                    # 검수 AI(Ollama)도 올라와 있으면 내림
+            ps = json.loads(urllib.request.urlopen(PAUSE_OLLAMA_URL + "/api/ps", timeout=3).read().decode("utf-8"))
+            for m in ps.get("models") or []:
+                nm = m.get("model") or m.get("name")
+                if nm:
+                    post(PAUSE_OLLAMA_URL + "/api/generate", {"model": nm, "keep_alive": 0}, 60)
+        except Exception:
+            pass
+        if self.since == since:
+            self.gpu = "그래픽카드 비움 — 다른 일에 써도 됨" + ("" if base else " (ComfyUI 는 꺼져 있었음)")
+
+    def resume(self):
+        with self.lock:
+            if not self.on:
+                return "멈춰 있지 않음"
+            dur = time.time() - self.since
+            procs = _procs()
+            for pid, exe in list(self.frozen.items()):
+                if (procs.get(pid) or (0, ""))[1] == exe:      # 같은 번호를 다른 프로그램이 쓰고 있으면 안 건드림
+                    _suspend(pid, False)
+            for w in self._workers():
+                if getattr(w, "cur", None):
+                    w.t0 += dur                                 # 화면의 '몇 분째'에서 멈춘 시간은 뺌
+            self.since, self.frozen, self.msg, self.gpu = None, {}, "", ""
+            try:
+                os.remove(self.path)
+            except Exception:
+                pass
+        return "다시 시작 — 멈췄던 자리에서 이어 감 (%d분 멈춰 있었음)" % round(dur / 60)
+
+
 class Worker(threading.Thread):
     """우체통이 없는 폴더(실험 폴더)용: _remote\\inbox 를 화면이 직접 하나씩 돌림"""
     def __init__(self, app):
@@ -1378,11 +1766,15 @@ class Worker(threading.Thread):
     def run(self):
         a = self.app
         while True:
+            if a.pauser.on:                         # 전부 잠깐 멈춤: 새 작업을 안 집음
+                time.sleep(2); continue
             jobs = sorted(n for n in os.listdir(a.inbox) if n.endswith(".json")
                           and time.time() - os.path.getmtime(os.path.join(a.inbox, n)) > 2)
             if not jobs:
                 time.sleep(2); continue
             with a.gpu:
+                if a.pauser.on:                     # 다른 일꾼을 기다리는 사이에 멈춤을 눌렀으면 안 집음
+                    continue
                 n = jobs[0]
                 jid = n[:-5]
                 src = os.path.join(a.inbox, n)
@@ -1489,6 +1881,9 @@ class PrivateWorker(threading.Thread):
             a.unhold()
         while True:
             try:
+                if a.pauser.on:                     # 전부 잠깐 멈춤: 새 작업을 안 집음
+                    self.wait_msg = "⏸ 전부 멈춤 중 — '다시 시작'을 누르면 이어서"
+                    time.sleep(2); continue
                 pend = self.pending()
                 fr = a.front_clean()
                 if fr and str(fr[0].get("root") or "0") == "0":
@@ -1532,6 +1927,10 @@ class PrivateWorker(threading.Thread):
                     self.wait_msg = ""
                     lock = a.gpu if not a.has_runner else threading.Lock()
                     with lock:
+                        while a.pauser.on:          # 작업을 집은 뒤 GPU 를 기다리는 사이에 멈춤을 눌렀으면 다시 시작까지 기다림
+                            self.wait_msg = "⏸ 전부 멈춤 중 — '다시 시작'을 누르면 이어서"
+                            time.sleep(1)
+                        self.wait_msg = ""
                         self.cur, self.cur_root, self.t0, self.killed = jid, rid, time.time(), False
                         rc = _run_nk(a.kit, args, os.path.join(home, "_nk", "logs", jid + ".log"), {"NK_HOME": home},
                                      on_start=lambda p: setattr(self, "proc", p))
@@ -1689,6 +2088,57 @@ class ABSets:
         return {"ok": True, "key": key, "rec": rec if key in d else None}
 
 
+# ---------------------------------------------------------------- 컷 카드: 대사 목록 · 실제로 쓴 글
+# 대사 고치기 = 컷 카드의 '대사 고치기' -> /api/lines -> App.lines_save -> nk_lines.save (conti.yaml·plan.yaml 의 그 글자만, 백업 먼저)
+# 실제로 쓴 글 = 그 컷을 마지막으로 그릴 때 그림 AI 에 보낸 글 전체 (캐릭터 겉모습 문장 포함). 그리는 쪽이 남긴 기록 파일을 읽기만 함:
+#   혼자·사람 없는 컷·LoRA 없는 두 명 컷 = animamake.json {"<컷 번호>": {text, negative, seed, settings, time}}
+#   LoRA 캐릭터가 나오는 두 명 컷     = regionlora.json {"cutNN": {text, lora_text, seed, time}}
+#   둘 다 있으면 time 이 늦은 쪽 (= 마지막 그림). 기록이 없으면 빈 목록 (화면은 '아직 안 그린 컷'이라고 보여 줌)
+def _lines_items(ct):
+    """컷 카드에 보여 줄 말풍선·해설·효과음 글 목록 (nk_lines.py 가 없거나 에러면 빈 목록 = 버튼이 안 보일 뿐)"""
+    try:
+        import nk_lines
+        return nk_lines.items_of(ct)
+    except Exception:
+        return []
+
+
+def _jload(p):
+    try:
+        d = json.load(open(p, encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def used_prompt(cid, am, rl):
+    """그 컷을 마지막으로 그릴 때 실제로 보낸 글 -> [[이름, 글], ...] (읽기 전용)"""
+    try:
+        cid = int(cid)
+        got = [(k, x) for k, x in (("am", am.get(str(cid))), ("rl", rl.get("cut%02d" % cid)))
+               if isinstance(x, dict) and x.get("text")]
+        if not got:
+            return []
+        kind, x = max(got, key=lambda kx: str(kx[1].get("time") or ""))
+        rows = []
+        if kind == "am":
+            rows.append(["글", str(x["text"])])
+            for k, rg in zip("AB", (x.get("settings") or {}).get("_regions") or []):     # 두 명 컷: 사람별 자리 글
+                if isinstance(rg, (list, tuple)) and len(rg) >= 2 and rg[1]:
+                    rows.append(["사람 %s 자리 글" % k, str(rg[1])])
+        else:
+            rows.append(["글 (전체)", str(x["text"])])
+            if x.get("lora_text"):
+                rows.append(["LoRA 캐릭터 자리 글", str(x["lora_text"])])
+        if x.get("negative"):
+            rows.append(["빼는 글 (negative)", str(x["negative"])])
+        if x.get("seed") is not None:
+            rows.append(["시드", str(x["seed"])])
+        return rows
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------- HTTP
 def make_handler(app):
     class H(BaseHTTPRequestHandler):
@@ -1748,6 +2198,7 @@ def make_handler(app):
                         pl = {"items": [], "error": str(e)}
                     out = {"runner": rs, "services": app.services(), "queue": q, "recent": rec, "plan": pl,
                            "private": pv, "holding": os.path.exists(app.busy_mark), "cleared_at": at,
+                           "pause": app.pauser.state(),             # ⏸ 전부 잠깐 멈춤 상태 (화면 위 버튼)
                            # 가장 최근에 끝난 작업의 끝 시각 (숨긴 것 포함) = 화면이 '새 작업이 끝났다'를 아는 값. 이름이 아니라 시각이라 개인 작업도 안 샘
                            "recent_top": (allrec[0].get("end") or "") if allrec else ""}
                     if cv:
@@ -1792,6 +2243,10 @@ def make_handler(app):
                     args, note, rid = app.make_job(b)
                     return self._send(200, {"ok": True, "name": app.add_job(args, note, rid), "args": args,
                                             "private": rid != "0"})
+                if u == "/api/lines":                # 대사 고치기 (nk_lines.py)
+                    return self._send(200, app.lines_save(b))
+                if u == "/api/pause":                # ⏸ 전부 잠깐 멈춤 / ▶ 다시 시작
+                    return self._send(200, {"ok": True, "msg": app.pauser.pause() if b.get("on") else app.pauser.resume()})
                 if u == "/api/interpret":
                     return self._send(200, app.interpret(b))
                 if u == "/api/label":
@@ -1932,6 +2387,8 @@ textarea{width:100%;min-height:120px}
 .uni .th .on{outline:2px solid var(--acc);border-radius:5px}
 .fixbox{display:none;flex-direction:column;gap:5px}
 .fixbox.open{display:flex}
+.fixbox textarea{min-height:64px;font-size:12.5px}.fixbox .sl{font-size:12px;color:var(--mute);margin-top:4px}
+.used{font-size:12.5px}.used summary{cursor:pointer}
 .q li{margin:3px 0;overflow-wrap:anywhere}
 pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;max-height:260px;overflow:auto;font-size:12px;white-space:pre-wrap}
 #zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:20;cursor:zoom-out}
@@ -2010,6 +2467,7 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
   <span id="cur" class="mute"></span>
   <button id="b-kill" class="danger" style="display:none">지금 작업 멈추기</button>
   <button id="b-runner" style="display:none">우체통 켜기</button>
+  <button id="b-pause" title="다른 일(게임 등)에 그래픽카드를 쓸 때: 새 작업을 안 시작하고, 도는 작업은 그 자리에서 얼리고, 그래픽카드 메모리를 비움. '다시 시작'을 누르면 멈춘 자리에서 이어 감 (그리던 컷도 안 버림)">⏸ 전부 잠깐 멈춤</button><span id="pz" class="mute" style="font-size:12.5px"></span>
   <a href="/label" style="margin-left:auto">정답 표시 →</a> <a href="/ab">섞어서 비교 →</a>
 </header>
 <div id="prog"><div class="box">
@@ -2146,6 +2604,9 @@ async function refresh(){
   const pgt=pg?(" — "+String(pg.ep)+" "+(pg.step?(STEP_KO[pg.step]||pg.step)+" 단계":"준비")+(pg.total?" · 컷 "+pg.drawn+"/"+pg.total:"")+(pg.eta_s!=null?" · 약 "+Math.max(1,Math.round(pg.eta_s/60))+"분 남음 (추정)":"")):"";
   $("#cur").textContent=pv.job?("🔒 개인 작업 "+pv.job+" · "+Math.round((pv.elapsed_s||0)/60)+"분째"):((r.alive&&r.job)?(r.job+" · "+Math.round((r.elapsed_s||0)/60)+"분째"+pgt):"")+(pv.wait?"  ·  🔒 "+pv.wait:"");
   $("#b-kill").style.display=(pv.job||(r.alive&&r.job))?"":"none";
+  const pz=s.pause||{};      // 전부 잠깐 멈춤
+  $("#b-pause").textContent=pz.on?"▶ 다시 시작":"⏸ 전부 잠깐 멈춤";$("#b-pause").className=pz.on?"pri":"";$("#b-pause").dataset.on=pz.on?"1":"";
+  $("#pz").textContent=pz.on?("⏸ 멈춤 "+pz.mins+"분째 · "+(pz.gpu||pz.msg||"")):"";
   drawProg(s.plan||{});
   const q=s.queue;
   $("#queue").innerHTML=(s.holding?"<div class='mute' style='font-size:12px;margin-bottom:4px'>개인 작업 동안 키트 작업 줄은 잠시 비켜 둠 (끝나면 자동으로 되돌림)</div>":"")+(q.length?q.map(j=>"<div class='qitem"+(j.paused?" paused":"")+(j.front?" front":"")+"'>"+(j.paused?"<b>⏸ 멈춤</b> ":(j.front?"<b>▶ 먼저</b> ":""))+(j.private?"<b>🔒 개인</b> ":(j.mine?"<b>내 작업</b> ":"<span class='mute'>밖에서 넣음</span> "))+(j.held&&!j.paused?"<span class='mute'>(잠시 비킴)</span> ":"")+esc(argsText(j.args))+
@@ -2211,8 +2672,23 @@ function tagBox(c){const t=c.tags;if(!t)return "<div class='mute' style='font-si
   if(duo)Object.entries(t.roles||{}).forEach(([w,ts])=>{h+="<div class='tgrp'><b>"+esc(w)+"만</b> "+chips(c.id,"who:"+w,ts)+"</div>"});
   if(t.loc)h+="<div class='tgrp'><b>배경</b> <span class='mute'>(장소 "+esc(t.loc)+" — 이 장소의 모든 컷이 같이 씀)</span> "+chips(c.id,"loc",t.loc_tags)+"</div>";
   Object.entries(t.props||{}).forEach(([n,ts])=>{h+="<div class='tgrp mute'><b>소품 "+esc(n)+"</b> "+(ts||[]).map(esc).join(", ")+" <span>(여러 컷이 같이 써서 여기선 못 고침)</span></div>"});
-  if(t.sentence)h+="<div class='tgrp mute'><b>동작 문장</b> "+esc(t.sentence)+"</div>";
-  return h+"<div class='mute' style='font-size:12px'>캐릭터 겉모습(옷·무늬)은 캐릭터 파일에서 자동으로 붙어서 여기 없음</div>"}
+  return h+"<div class='mute' style='font-size:12px'>캐릭터 겉모습(옷·무늬) 문장은 캐릭터 파일에서 자동으로 붙어서 여기서는 못 고침 (아래 '실제로 쓴 글'에서 볼 수는 있음)</div>"}
+// 문장 고치기: 컷의 영어 동작 문장(scene / sentence)·그림에 보여야 할 것(show) — '고쳐서 다시 그리기'가 쪽지로 보내고 그 컷만 새 시드로 다시 그림
+function sentBox(c){const t=c.tags;if(!t)return "";
+  return "<div class='sentbox'><b style='font-size:12.5px'>문장 고치기</b> <span class='mute' style='font-size:12px'>(영어로 — 그림 AI 가 한국어를 못 읽음. 고친 칸만 바뀜)</span>"+
+    "<div class='sl'>동작 문장 ("+esc(t.sentence_key||"sentence")+")</div><textarea data-sen='"+c.id+"' rows='4'>"+esc(t.sentence||"")+"</textarea>"+
+    "<div class='sl'>그림에 보여야 할 것 (한 줄에 하나)</div><textarea data-show='"+c.id+"' rows='3'>"+esc((t.show||[]).join("\n"))+"</textarea></div>"}
+// 실제로 쓴 글 보기 (읽기 전용): 마지막 그림을 그릴 때 그림 AI 에 보낸 글 전체
+function usedBox(c){const u=c.used||[];
+  if(!u.length)return "<div class='mute' style='font-size:12px'>그린 기록이 없어 '실제로 쓴 글'이 없음 (그리고 나면 여기에 전체 글이 보임)</div>";
+  return "<details class='used'><summary>마지막 그림에 실제로 쓴 글 전체 (읽기 전용 · 캐릭터 겉모습 문장 포함)</summary>"+
+    u.map(x=>"<div class='tgrp'><b>"+esc(x[0])+"</b> <span style='word-break:break-word'>"+esc(x[1])+"</span></div>").join("")+"</details>"}
+// 대사 고치기: 컷의 말풍선·해설·효과음 글을 칸으로 보여 주고 글만 고침 (nk_lines.py)
+function lineBox(c,d){const it=c.items||[];if(!it.length)return "";
+  return "<div class='row'><button data-lnopen='"+c.id+"' title='이 컷의 말풍선·해설·효과음 글을 고쳐요 (그림은 그대로, 말풍선만 다시 입힘)'>대사 고치기</button></div>"+
+    "<div class='fixbox' id='ln"+c.id+"'>"+it.map(x=>"<div class='sl'>"+(x.i+1)+". "+esc(x.type_ko)+(x.who?" · "+esc(x.who):"")+"</div><textarea data-lnt='"+c.id+":"+x.i+"' rows='2'>"+esc(x.text)+"</textarea>").join("")+
+    "<div class='row'><button class='pri' data-lnsave='"+c.id+"' data-lnl='1'"+(d.pages.length?"":" disabled")+" title='글을 저장하고 이 만화의 말풍선을 다시 입혀요 (작업 줄에 들어감)'>저장하고 말풍선 다시</button><button data-lnsave='"+c.id+"' data-lnl=''>저장만</button></div>"+
+    "<div class='mute' style='font-size:12px'>글만 바뀜 (말하는 사람·자리·종류는 그대로). 고치기 전 파일은 만화 폴더의 _lines_bak 에 백업. 쪽 그림이 아직 없으면 '저장만'.</div></div>"}
 function whereOpts(c){const t=c.tags||{}, duo=(t.who||c.who||[]).length>=2;
   return "<option value=''>"+(duo?"두 사람 공통":"이 컷")+"</option>"+(duo?(t.who||c.who||[]).map(w=>"<option value='who:"+esc(w)+"'>"+esc(w)+"만</option>").join(""):"")+(t.loc?"<option value='loc'>배경 (장소 "+esc(t.loc)+")</option>":"")}
 function uniBox(c,anima){
@@ -2254,15 +2730,16 @@ async function loadEp(ep,keep){
       "<div class='t'>"+c.id+"번 · "+esc(who)+" · "+esc(c.shot||"")+(c.duo?" · 두 명":"")+"</div>"+
       "<div class='s'>"+esc(c.action||c.scene||"")+(c.roles?"<br>"+Object.entries(c.roles).map(([k,v])=>esc(k)+": "+esc(v)).join("<br>"):"")+"</div>"+
       (c.lines.length?"<div class='s'>“"+c.lines.map(esc).join("” “")+"”</div>":"")+
+      lineBox(c,d)+
       c.flags.map(f=>"<div class='f' title='"+esc(f)+"'>"+esc(flagKo(f))+"</div>").join("")+uniBox(c,d.anima)+
       ((c.cands||[]).length?"<div class='th'>"+c.cands.map(x=>"<div><img loading='lazy' src='"+img(x.img,300)+"&t="+Math.round(x.mtime)+"' data-z='"+esc(x.img)+"' alt=''><button data-ucand='"+c.id+":"+esc(x.name)+"'>이걸로</button></div>").join("")+"</div><div class='mute' style='font-size:12px'>후보 (새 시드) — '이걸로'를 누르면 그 그림으로 바꾸고 말풍선을 다시 넣음</div>":"")+
       (d.has_plan?"<div class='row'><button class='pri' data-edit='"+c.id+"'>수정하기</button><span class='mute' style='font-size:12px'>말로 적으면 이 PC 의 AI(Ollama)가 해석</span></div>"+
         "<div class='editbox' id='ed"+c.id+"'><textarea data-etext='"+c.id+"' placeholder='어떻게 고칠지 말로 적기 — 예: 주인공 배만 다시 그려 줘 / 토끼 손 고쳐 줘 / 우산 빼고 웃는 얼굴로 / 그냥 다시 그려 줘'></textarea>"+
         "<div class='row'><button data-einterp='"+c.id+"'>해석하기</button></div><div class='eres' id='er"+c.id+"'></div></div>":"")+
-      "<div class='row'><button data-redo='"+c.id+"' title='같은 글, 새 시드로 이 컷만 다시 (누를 때마다 다른 그림)'>다시 그리기</button>"+(d.anima?"<button data-cands='"+c.id+"' title='새 시드로 3장 그려 두고 고르기 (지금 그림은 고를 때까지 그대로)'>후보 3장</button>":"")+"<button data-open='"+c.id+"'>태그 고치기</button>"+(c.raw&&c.raw!==c.img?"<button data-raw='"+esc(c.raw)+"'>원본</button>":"")+"</div>"+
+      "<div class='row'><button data-redo='"+c.id+"' title='같은 글, 새 시드로 이 컷만 다시 (누를 때마다 다른 그림)'>다시 그리기</button>"+(d.anima?"<button data-cands='"+c.id+"' title='새 시드로 3장 그려 두고 고르기 (지금 그림은 고를 때까지 그대로)'>후보 3장</button>":"")+"<button data-open='"+c.id+"' title='태그와 문장(동작 문장·보여줄 것)을 고쳐서 다시 그리기'>태그·문장 고치기</button>"+(c.raw&&c.raw!==c.img?"<button data-raw='"+esc(c.raw)+"'>원본</button>":"")+"</div>"+
       "<div class='fixbox' id='fx"+c.id+"'>"+tagBox(c)+"<input placeholder='더할 태그 (예: rain, umbrella)' data-add='"+c.id+"'><input placeholder='뺄 태그 (위 태그를 누르면 들어감)' data-rem='"+c.id+"'>"+
       "<div class='row'><span class='mute' style='font-size:12px'>어디에 적용</span><select data-where='"+c.id+"'>"+whereOpts(c)+"</select></div>"+
-      "<button class='pri' data-fix='"+c.id+"'>고쳐서 다시 그리기</button></div></div>"}).join("")+"</div></section>";
+      sentBox(c)+usedBox(c)+"<button class='pri' data-fix='"+c.id+"' title='문장을 고치면 시드도 새로 정해서 그려요 (태그만 고치면 시드 그대로)'>고쳐서 다시 그리기</button></div></div>"}).join("")+"</div></section>";
   $("#detail").innerHTML=h;
   document.querySelectorAll("[data-z]").forEach(i=>i.onclick=()=>zoom(i.dataset.z));
   document.querySelectorAll("[data-raw]").forEach(b=>b.onclick=()=>zoom(b.dataset.raw));
@@ -2283,6 +2760,16 @@ async function loadEp(ep,keep){
       if(r.job)$("#ego"+id).onclick=()=>{job(Object.assign({ep:ep},r.job),"수정 작업을 줄에 넣음");box.innerHTML="<span class='ok'>작업 줄에 넣었어 — 끝나면 이 컷이 바뀌어 (부위 수정은 후보가 생김)</span>"};
     }catch(e){box.innerHTML="<span class='bad'>안 됨: "+esc(e.message)+"</span>"}finally{b.disabled=false}});
   document.querySelectorAll("[data-redo]").forEach(b=>b.onclick=()=>job({kind:"fix",ep:ep,cut:+b.dataset.redo}));
+  // 대사 고치기: 바뀐 줄만 {i, old(화면에 보인 글), text(새 글)} 로 보냄 — 서버가 old 로 '화면이 낡았나'를 확인
+  document.querySelectorAll("[data-lnopen]").forEach(b=>b.onclick=()=>$("#ln"+b.dataset.lnopen).classList.toggle("open"));
+  document.querySelectorAll("[data-lnsave]").forEach(b=>b.onclick=async()=>{const id=b.dataset.lnsave, cc=d.cuts.find(x=>String(x.id)===String(id))||{}, edits=[];
+    (cc.items||[]).forEach(x=>{const ta=document.querySelector("[data-lnt='"+id+":"+x.i+"']");if(ta&&ta.value!==x.text)edits.push({i:x.i,old:x.text,text:ta.value})});
+    if(!edits.length){toast("고친 곳이 없어요");return}
+    b.disabled=true;
+    try{const r=await post("/api/lines",{root:curRoot,ep:ep,cut:+id,edits:edits,letter:!!b.dataset.lnl});
+      toast("대사 "+r.changed+"줄 고침"+(r.job?" · 말풍선 다시 작업을 줄에 넣음":"")+" — "+(r.plan||""),8000);
+      if(r.job)refresh();loadEp(ep,true)}
+    catch(e){toast("안 됨: "+e.message,10000)}finally{b.disabled=false}});
   document.querySelectorAll("[data-cands]").forEach(b=>b.onclick=()=>job({kind:"cands",ep:ep,cut:+b.dataset.cands},"후보 3장 (지금 그림은 그대로)"));
   document.querySelectorAll("[data-ucand]").forEach(b=>b.onclick=()=>{const [id,nm]=b.dataset.ucand.split(":");job({kind:"usecand",ep:ep,cut:+id,name:nm})});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>$("#fx"+b.dataset.open).classList.toggle("open"));
@@ -2295,12 +2782,20 @@ async function loadEp(ep,keep){
     inp.value=[...document.querySelectorAll("[data-tg='"+id+"'].off")].map(x=>x.dataset.tag).join(", ")});
   document.querySelectorAll("[data-fix]").forEach(b=>b.onclick=()=>{const id=b.dataset.fix;
     const add=document.querySelector("[data-add='"+id+"']").value, rem=document.querySelector("[data-rem='"+id+"']").value;
-    const wh=(document.querySelector("[data-where='"+id+"']")||{}).value||""; if(!add.trim()&&!rem.trim()){toast("더할 태그나 뺄 태그를 적어 주세요");return}
-    if(wh==="loc"&&!confirm("배경(장소) 태그는 같은 장소의 다른 컷도 같이 씁니다.\n이 컷만 다시 그리고, 다른 컷은 다시 그릴 때 바뀐 배경으로 그려집니다. 계속할까요?"))return;
-    job({kind:"fix",ep:ep,cut:+id,add:add,remove:rem,who:wh.startsWith("who:")?wh.slice(4):"",where:wh==="loc"?"loc":""})});
+    const wh=(document.querySelector("[data-where='"+id+"']")||{}).value||"";
+    // 문장 고치기: 처음 보여 준 글과 달라진 칸만 보냄 (빈칸·줄바꿈 차이는 같은 글로 봄)
+    const cc=d.cuts.find(x=>String(x.id)===String(id))||{}, tt=cc.tags||{}, nz=s=>String(s||"").replace(/\s+/g," ").trim();
+    const se=document.querySelector("[data-sen='"+id+"']"), sh=document.querySelector("[data-show='"+id+"']"), edit={};
+    if(se&&nz(se.value)!==nz(tt.sentence))edit.sentence=se.value;
+    if(sh){const now=sh.value.split("\n").map(nz).filter(Boolean), was=(tt.show||[]).map(nz).filter(Boolean);if(JSON.stringify(now)!==JSON.stringify(was))edit.show=now}
+    const hasEdit=edit.sentence!==undefined||edit.show!==undefined;
+    if(!add.trim()&&!rem.trim()&&!hasEdit){toast("고친 곳이 없어요 — 태그나 문장을 고쳐 주세요");return}
+    if(wh==="loc"&&(add.trim()||rem.trim())&&!confirm("배경(장소) 태그는 같은 장소의 다른 컷도 같이 씁니다.\n이 컷만 다시 그리고, 다른 컷은 다시 그릴 때 바뀐 배경으로 그려집니다. 계속할까요?"))return;
+    job({kind:"fix",ep:ep,cut:+id,add:add,remove:rem,who:wh.startsWith("who:")?wh.slice(4):"",where:wh==="loc"?"loc":"",edit:hasEdit?edit:undefined})});
 }
 $("#b-kill").onclick=async()=>{if(!confirm("지금 도는 작업을 멈출까요?\n그리던 그림 1장은 버려지고, 만화 작업이면 '멈춘 작업'으로 남아서 '이어서 시작'으로 이어 갈 수 있어."))return;try{const j=await post("/api/kill");toast("멈춤: "+j.job+" — 작업 줄 맨 끝 '⏸ 멈춤'에서 이어서 시작",7000);refresh()}catch(e){toast(e.message)}};
 $("#b-runner").onclick=async()=>{try{const j=await post("/api/runner");toast(j.msg)}catch(e){toast(e.message)}};
+$("#b-pause").onclick=async()=>{const on=!$("#b-pause").dataset.on;try{const j=await post("/api/pause",{on:on});toast(j.msg,8000);refresh()}catch(e){toast(e.message)}};
 $("#b-aifile").onclick=()=>job({kind:"aifile",root:"0"},"글콘티용 첨부 파일 만들기 (키트 폴더의 AI_글콘티_만들기.md)");
 function paste(go){const ep=$("#new-ep").value.trim(), t=$("#new-text").value;if(!ep||!t.trim()){toast("이름과 AI 답을 넣어 주세요");return}job({kind:"paste",ep:ep,text:t,go:go,root:$("#new-root").value,flow:$("#new-flow").value})}
 async function loadFlows(){try{const f=await get("/api/flows?root="+encodeURIComponent($("#new-root").value||"0"));$("#new-flow").innerHTML="<option value=''>기본 (nk 그리기)</option>"+(f.flows||[]).map(x=>"<option>"+esc(x)+"</option>").join("")}catch(e){}}

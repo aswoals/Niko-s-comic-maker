@@ -51,6 +51,7 @@ nk ep charadd <캐릭터_태그> --ko "한국어 이름" --save   # 초안이 �
 | 칸 | 하는 일 |
 |---|---|
 | `anima_upper`, `anima_head`, `anima_face`, `anima_back` | 컷 거리나 방향마다 다른 짧은 설명 (없으면 `anima`를 씀) |
+| `anima_body` | 얼굴이 칸 밖인 컷(`head out of frame`)에서 쓰는 머리 없는 몸 설명 (없으면 `anima`에서 머리, 머리카락, 눈, 귀 낱말을 빼고 씀) |
 | `negative_extra` | 이 캐릭터일 때만 더하는 부정 태그 (색 낱말, furry, anthro는 넣지 않기) |
 | `duo_exclusive` | 두 명 컷에서 상대에게 옮겨 붙으면 안 되는 이 캐릭터만의 것 |
 | `mask_grow`, `mask_cap` | 옷 부피가 큰 캐릭터라면 두 명 컷 영역을 크게 |

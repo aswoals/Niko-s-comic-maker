@@ -63,12 +63,51 @@ class Camera:
         return np.stack([x, y], axis=1), z
 
 
+HEAD_PARTS = ("neck", "head", "nose", "muzzle", "ear_r", "ear_l")      # 얼굴이 칸 밖인 사람(no_head)에게서 빼는 조각
+
+
+def doll_parts(d, fit=False):
+    """인형 조각 목록 (body.Doll.primitives). 얼굴이 칸 밖인 사람(shape 의 no_head) = 머리·목·코·귀를 빼고 목 자리에서 위로 기둥(neck_up)을 세움.
+    깊이 그림에 인형 머리가 보이면 얼굴이 그려지고, 몸통 위가 둥글게 끝나면 모델이 그걸 머리로 읽음 -> 기둥이 칸 가장자리에서 잘리게.
+    fit=True (카메라 거리 계산) 면 기둥도 뺌."""
+    ps = d.primitives()
+    if not d.b.get("no_head"):
+        return ps
+    ps = [p for p in ps if p[1] not in HEAD_PARTS]
+    if not fit:
+        P, F = d.pos, d.frame
+        ps.append(("cap", "neck_up", P["chest"], P["chest"] + F["spine"] @ np.array([0, d.b.get("neck_up_len", 3.0), 0]),
+                   d.b["torso_rx"] * 0.8))
+    return ps
+
+
+def _neck_up_len(dolls, cam, width, height):
+    """얼굴이 칸 밖인 사람(no_head)의 목 위 기둥 길이: 카메라가 정해진 뒤, 기둥 끝이 화면 밖(가장자리 10% 바깥)으로 나가는 가장 짧은 길이.
+    너무 길면 위·앞에서 찍을 때 기둥이 큰 원판으로 보이고, 너무 짧으면 칸 안에서 끝나 머리처럼 보임"""
+    for d in dolls:
+        if not d.b.get("no_head"):
+            continue
+        P, F = d.pos, d.frame
+        ax = F["spine"] @ np.array([0, 1.0, 0])
+        best = 3.0
+        for L in (0.5, 0.8, 1.1, 1.5, 2.0, 2.6, 3.2):
+            uv, z = cam.project((P["chest"] + ax * L)[None])
+            if z[0] < 0.25:
+                break
+            nx = abs(uv[0, 0] - width / 2) / (width / 2)
+            ny = abs(uv[0, 1] - height / 2) / (height / 2)
+            best = L
+            if max(nx, ny) > 1.1:
+                break
+        d.b["neck_up_len"] = best
+
+
 def auto_camera(dolls, yaw, pitch, fov, width, height, dist=None, margin=1.12):
     """dist 가 없으면 두 인형(조각 전체)이 화면에 다 들어오는 거리로"""
     pts = []
     six = np.vstack([np.eye(3), -np.eye(3)])
     for d in dolls:
-        for p in d.primitives():
+        for p in doll_parts(d, fit=True):
             if p[0] == "cap":
                 pts += list(p[2] + six * p[4]) + list(p[3] + six * p[4])
             else:
@@ -80,7 +119,9 @@ def auto_camera(dolls, yaw, pitch, fov, width, height, dist=None, margin=1.12):
     pts = np.array(pts)
     center = (pts.min(0) + pts.max(0)) / 2
     if dist is not None:
-        return Camera(center, yaw, pitch, dist, fov, width, height)
+        cam = Camera(center, yaw, pitch, dist, fov, width, height)
+        _neck_up_len(dolls, cam, width, height)
+        return cam
     dist = 2.0
     for _ in range(30):                          # 화면 밖으로 나가는 점이 없을 때까지 거리 조절
         cam = Camera(center, yaw, pitch, dist, fov, width, height)
@@ -94,7 +135,9 @@ def auto_camera(dolls, yaw, pitch, fov, width, height, dist=None, margin=1.12):
         if abs(need - 1.0) < 0.01:
             break
         dist *= need ** 0.9
-    return Camera(center, yaw, pitch, dist, fov, width, height)
+    cam = Camera(center, yaw, pitch, dist, fov, width, height)
+    _neck_up_len(dolls, cam, width, height)
+    return cam
 
 
 # ------------------------------------------------------------------ 광선 - 조각 부딪힘 (길이 1인 광선 d, 시작점 o 는 모두 같음)
@@ -158,7 +201,7 @@ def _bound(p):
 
 def scene_parts(dolls):
     """[(사람 번호, 부위 이름, 조각)]"""
-    return [(i, p[1], p) for i, dl in enumerate(dolls) for p in dl.primitives()]
+    return [(i, p[1], p) for i, dl in enumerate(dolls) for p in doll_parts(dl)]
 
 
 def raycast(cam, parts, rays=None, pix=None):

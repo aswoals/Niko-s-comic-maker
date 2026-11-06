@@ -15,8 +15,9 @@ nk 가 ComfyUI 에 보내는 HTTP 요청을 흉내낸다. GPU·모델 없이 '�
   - SAM3_Detect 가 들어간 그래프: 흰 타원 마스크 (프롬프트에 head/face 가 있으면 위쪽, hand 면 작은 원)
   - LoadImage 에서 온 그림(편집·다시 칠하기): 올린 그림을 크기만 맞추고 살짝 색을 바꿈 (전/후가 달라야 md5 비교가 동작)
 
-실행(따로 띄울 때):  python tests/mock_comfy.py --port 18188 [--data <폴더>] [--fail-class KSampler]
-  --fail-class: 그 노드가 들어간 작업은 status error 로 답함 (실패 경로 시험용)"""
+실행(따로 띄울 때):  python tests/mock_comfy.py --port 18188 [--data <폴더>] [--fail-class KSampler] [--hide RegionalSampler]
+  --fail-class: 그 노드가 들어간 작업은 status error 로 답함 (실패 경로 시험용)
+  --hide: 그 노드가 설치 안 된 척 (object_info 에 없고, 그 노드가 든 작업은 400) — 확장이 없는 ComfyUI 흉내"""
 import os, sys, io, json, uuid, time, random, argparse, threading, hashlib, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -76,14 +77,16 @@ if os.environ.get("MOCK_NO_ETN"):          # 어텐션 영역 노드가 없는 C
     NODES = [n for n in NODES if not n.startswith("ETN_")]
 
 
-def object_info(name=None):
+def object_info(name=None, nodes=None):
+    nodes = NODES if nodes is None else nodes
+
     def one(n):
         req = dict(DETAIL.get(n, {}))
         return {"input": {"required": req, "optional": {}}, "output": [], "name": n, "display_name": n,
                 "python_module": "comfy_extras.nodes_mock", "category": "mock"}
     if name is None:
-        return {n: one(n) for n in NODES}
-    return {name: one(name)} if name in NODES else {}
+        return {n: one(n) for n in nodes}
+    return {name: one(name)} if name in nodes else {}
 
 
 # ------------------------------------------------------------------ 그래프 따라가기
@@ -259,9 +262,10 @@ def mask_picture(w, h, prompt, individual):
 
 # ------------------------------------------------------------------ 서버
 class State:
-    def __init__(self, data, fail_class):
+    def __init__(self, data, fail_class, hide=()):
         self.data = data
         self.fail_class = set(x for x in (fail_class or "").split(",") if x)
+        self.nodes = [n for n in NODES if n not in set(hide or ())]     # hide = 설치 안 된 척할 노드 (예: Impact Pack 없는 ComfyUI)
         self.uploads = {}         # "subfolder/name" -> (w, h)
         self.history = {}
         self.log = []             # [(시간, 경로, 요약)] - 실행기가 /mock/log 로 읽음
@@ -370,9 +374,9 @@ def make_handler(S):
                 return self._send(200, {"system": {"os": "mock", "python_version": sys.version, "comfyui_version": "mock"},
                                         "devices": [{"name": "mock", "type": "cpu", "vram_total": 8 << 30, "vram_free": 8 << 30}]})
             if p == "/object_info":
-                return self._send(200, object_info())
+                return self._send(200, object_info(nodes=S.nodes))
             if p.startswith("/object_info/"):
-                return self._send(200, object_info(p[len("/object_info/"):]))
+                return self._send(200, object_info(p[len("/object_info/"):], S.nodes))
             if p.startswith("/history/"):
                 pid = p[len("/history/"):]
                 with S.lock:
@@ -408,7 +412,7 @@ def make_handler(S):
                     return self._send(400, {"error": "bad json: %s" % e})
                 g = d.get("prompt") or {}
                 bad = [k for k, v in g.items() if not isinstance(v, dict) or "class_type" not in v]
-                unknown = sorted(set(v.get("class_type") for v in g.values() if isinstance(v, dict)) - set(NODES))
+                unknown = sorted(set(v.get("class_type") for v in g.values() if isinstance(v, dict)) - set(S.nodes))
                 if bad or unknown:          # 진짜 ComfyUI 도 모르는 노드면 400 (node_errors)
                     return self._send(400, {"error": {"type": "invalid_prompt", "message": "mock: bad nodes %s unknown %s" % (bad, unknown)},
                                             "node_errors": {}})
@@ -457,9 +461,9 @@ def make_handler(S):
     return H
 
 
-def serve(port, data, fail_class="", host="127.0.0.1"):
-    """스레드로 띄우고 (server, state) 를 돌려줌 (실행기·pytest 가 씀)"""
-    S = State(data, fail_class)
+def serve(port, data, fail_class="", host="127.0.0.1", hide=()):
+    """스레드로 띄우고 (server, state) 를 돌려줌 (실행기·pytest 가 씀). hide = 없는 척할 노드 이름들"""
+    S = State(data, fail_class, hide)
     srv = ThreadingHTTPServer((host, port), make_handler(S))
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -471,11 +475,12 @@ def main():
     a.add_argument("--port", type=int, default=18188)
     a.add_argument("--data", default=None, help="그림을 둘 폴더 (기본: 임시 폴더 - 키트 폴더에는 안 씀)")
     a.add_argument("--fail-class", default="")
+    a.add_argument("--hide", default="", help="없는 척할 노드 (쉼표로), 예: RegionalSampler")
     o = a.parse_args()
     if not o.data:
         import tempfile
         o.data = tempfile.mkdtemp(prefix="nk_mock_comfy_")
-    srv, _ = serve(o.port, o.data, o.fail_class)
+    srv, _ = serve(o.port, o.data, o.fail_class, hide=[x for x in o.hide.split(",") if x])
     print("mock ComfyUI on http://127.0.0.1:%d  (data %s)" % (o.port, o.data))
     try:
         while True:

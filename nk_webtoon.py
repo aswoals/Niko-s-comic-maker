@@ -3170,6 +3170,13 @@ def page_letter(nk, kit, args, c):
     Image.init()                     # PDF writer needs the JPEG plugin registered (lazy-loaded otherwise -> KeyError 'JPEG')
     imgs[0].save(os.path.join(out, "book.pdf"), save_all=True, append_images=imgs[1:], resolution=150)
     print("pages -> %s  (%d pages %dx%d + spreads + book.pdf)" % (out, len(imgs), W, H))
+    try:                                 # 표지 = page_00.png + book.pdf 맨 앞 (nk_cover.py, 설정 cover.yaml). 실패해도 페이지는 그대로
+        import nk_cover
+        nk_cover.attach(nk, kit, args.ep, c, out, W, H)
+    except KeyboardInterrupt:
+        raise
+    except BaseException as e:
+        print("[note] cover skipped (%s)" % " ".join(str(e).split())[:200])
 
 
 def letter(nk, kit, args):
@@ -3339,7 +3346,11 @@ def add_parser(sub, nk, kit):
     a = esub.add_parser("letter"); a.add_argument("ep")
     a.add_argument("--style", help="use episodes/<ep>/cuts_<style>/ (from nk ep restyle) and write out_<style>/")
     a.set_defaults(func=lambda x: letter(nk, kit, x))
-    a = esub.add_parser("restyle", help="repaint final cuts in one art style with Qwen-Image-Edit, e.g. nk ep restyle ep01")
+    try:                                 # nk ep cover <ep> [--redo] (표지만 다시). nk_cover.py 가 없어도 다른 명령은 그대로
+        __import__("nk_cover").add_parser(esub, nk, kit)
+    except Exception as e:
+        print("[note] nk ep cover unavailable (%s)" % e)
+    a = esub.add_parser("restyle",help="repaint final cuts in one art style with Qwen-Image-Edit, e.g. nk ep restyle ep01")
     a.add_argument("ep"); a.add_argument("cuts", nargs="*", type=int); a.add_argument("--style")
     a.add_argument("--seed", type=int); a.add_argument("--dry", action="store_true")
     a.add_argument("--denoise", type=float, help="1.0 = full repaint (default). below ~0.9 the style hardly changes")
@@ -3407,6 +3418,10 @@ def add_parser(sub, nk, kit):
     __import__("nk_styleref").add_parser(esub, nk, kit)
     __import__("nk_web").add_parser(esub, nk, kit)
     __import__("nk_flow").add_parser(esub, nk, kit)
+    try:                                 # nk ep duosplit <ep> [컷...] (로라 없는 두 명 컷 나눠 그리기를 따로 돌릴 때). 없어도 nk ep auto 는 그대로
+        __import__("nk_duosplit").add_parser(esub, nk, kit)
+    except ImportError:
+        pass
     __import__("nk_regional").add_parser(esub, nk, kit)
     __import__("nk_joint").add_parser(esub, nk, kit)
     __import__("nk_animatest").add_parser(esub, nk, kit)
