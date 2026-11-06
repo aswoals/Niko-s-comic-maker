@@ -41,7 +41,7 @@
 | 무엇 | 쓰는 곳 |
 |---|---|
 | [Ollama](https://ollama.com/) + `gemma4:e4b-it-qat` 같은 작은 비전 모델 | 자동 검수, 한국어 고치기 요청 해석, 로컬 계획 쓰기 |
-| Grok·Gemini·ChatGPT 같은 웹 AI (무료판) | 계획표 쓰기 (`Grok_첨부용.md` 를 첨부) |
+| Grok·Gemini·ChatGPT 같은 웹 AI (무료판도 가능) | 계획표 쓰기 (`Grok_첨부용.md` 를 첨부) |
 | NoobAI-XL V-Pred 1.0 ([Laxhar/noobai-XL-Vpred-1.0](https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0)) | 예전 흐름 `--render noob`, `nk gen` |
 | Qwen-Image-Edit 2509 (fp8) + `qwen_2.5_vl_7b_fp8_scaled` | 문장으로 컷 고치기, 소품 넣기, 두 명 합치기 |
 | [ComfyUI-Anima-LLLite](https://github.com/kohya-ss/ComfyUI-Anima-LLLite) + LLLite 모델 | 3D 인형으로 자세 조종 (`pose3d`) |
