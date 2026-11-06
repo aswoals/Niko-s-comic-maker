@@ -44,7 +44,7 @@ nk ep charadd <캐릭터_태그> --ko "한국어 이름" --save   # 초안이 �
   ```
 - `anima_lora`가 있는 캐릭터가 두 명 컷에 나오면 프로그램이 나눠 그린다. 먼저 LoRA 없이 전체를 그리고, 그 캐릭터 자리만 LoRA로 다시 그린다. 상대 캐릭터에 LoRA가 번지지 않게 하려고 이렇게 한다.
   이 컷에는 ComfyUI 확장 [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)이 있어야 한다. LoRA 캐릭터는 한 만화에 하나만 쓸 수 있다 (둘 이상이면 첫 캐릭터만).
-- 학습은 `nk ep trainanima training/<설정>.yaml`로 돌린다. kohya sd-scripts가 필요하고, `C:\kohya_ss`가 아닌 곳에 깔았으면 환경 변수 `NK_KOHYA`에 그 경로를 넣는다.
+- 학습은 `nk ep trainanima training/<설정>.yaml`로 돌린다. kohya_ss 설치, 학습 그림 준비, 캡션(`AI_캡션_만들기.md`), 예시 설정(`training/example_anima.yaml`)까지 [TRAINING.md](TRAINING.md)에 순서대로 적어 두었다.
   학습 그림은 직접 그렸거나 권리가 있는 그림만 쓴다.
 
 ### 자주 쓰는 선택 칸

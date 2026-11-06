@@ -23,8 +23,8 @@ def test_restart_even_if_training_fails(tmp_path, monkeypatch):
         def wait(self):
             raise KeyboardInterrupt          # 학습이 도중에 멈춤
     monkeypatch.setattr(T.subprocess, "Popen", lambda *a, **k: P())
-    (tmp_path / "_remote").mkdir()
-    (tmp_path / "c.yaml").write_text("output_name: t", encoding="utf-8")
+    monkeypatch.setattr(T, "kohya_problems", lambda: [])
+    (tmp_path / "c.yaml").write_text("output_name: t", encoding="utf-8")      # _remote 폴더 없이도 돌아야 함 (공개본에는 없음)
     nk = types.SimpleNamespace(load_presets=lambda: {})
     args = types.SimpleNamespace(config="c.yaml", bench=None, dry=False, stop_comfy=True)
     try:
@@ -32,3 +32,5 @@ def test_restart_even_if_training_fails(tmp_path, monkeypatch):
     except KeyboardInterrupt:
         pass
     assert calls == ["stop", ("start", "C:/x/Comfy Desktop.exe")]      # /free 대신 끄기, 멈춰도 다시 켬
+    assert (tmp_path / "training" / "train_pid.txt").exists()          # PID 는 training/ 에 (멈춘 채라 지워지지 않음)
+    assert not (tmp_path / "_remote").exists()

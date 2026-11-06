@@ -1,0 +1,28 @@
+# kohya dataset config example for an Anima character LoRA (guide: docs/TRAINING.md)
+# Keep this file ASCII only (English): sd-scripts may read it with the Windows default encoding.
+# Copy it (e.g. training/fox_dataset.toml), point dataset_config in your .yaml to the copy,
+# then change image_dir below to your own image folder.
+
+[general]
+enable_bucket = true
+bucket_reso_steps = 32
+min_bucket_reso = 512
+max_bucket_reso = 1024
+caption_extension = ".txt"     # one caption file per image: 01.png -> 01.txt
+keep_tokens = 1                # the first caption tag (the trigger word) always stays first
+flip_aug = true                # also learn mirrored images. Set false if the character has markings on one side only
+
+[[datasets]]
+resolution = 768
+batch_size = 1
+
+  [[datasets.subsets]]
+  # FULL path to the image folder, with forward slashes (training runs from the sd-scripts folder)
+  image_dir = 'C:/nk/training/data/fox'
+  num_repeats = 1              # steps per epoch = number of images x num_repeats
+  # alpha_mask = true          # with masked_loss: true in the .yaml, transparent parts of PNGs are not learned
+
+  # more folders can be added the same way, each with its own num_repeats:
+  # [[datasets.subsets]]
+  # image_dir = 'C:/nk/training/data/fox_closeups'
+  # num_repeats = 2

@@ -47,7 +47,7 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
 | Qwen-Image-Edit 2509 (fp8)와 `qwen_2.5_vl_7b_fp8_scaled` | 문장으로 컷 고치기, 소품 넣기, 두 명 합치기 |
 | [comfyui-tooling-nodes](https://github.com/Acly/comfyui-tooling-nodes) | 두 명 컷 시험 방식 일부 |
 | 판별기 `models/wd-eva02-large-tagger-v3/` (ONNX), DWPose `models/dwpose/dw-ll_ucoco_384.onnx`, anime-seg `models/animeseg/isnetis.onnx` | 태그 판별 검사, 뼈대, 캐릭터 잘라내기 |
-| [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) (기본 위치 `C:\kohya_ss`, 다른 곳이면 환경 변수 `NK_KOHYA`) | 내 캐릭터 LoRA 학습 |
+| [kohya_ss](https://github.com/bmaltais/kohya_ss) (sd-scripts 포함, 기본 위치 `C:\kohya_ss`, 다른 곳이면 환경 변수 `NK_KOHYA`) | 내 캐릭터 LoRA 학습 ([docs/TRAINING.md](docs/TRAINING.md)) |
 | 태그 사전 `tags/danbooru.csv`, `tags/e621.csv` ([a1111-sd-webui-tagcomplete](https://github.com/DominikDoom/a1111-sd-webui-tagcomplete)) | 태그 검사, 캐릭터 찾기 ([docs/ADDING.md](docs/ADDING.md) 4절) |
 
 - 설치된 ComfyUI 노드 목록은 `nk ep nodes`로 볼 수 있다. 보기만 하고 아무것도 바꾸지 않는다.
@@ -59,7 +59,7 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
 
 1. 이 저장소를 내려받는다 (Code → Download ZIP, 또는 `git clone`).
 2. 파이썬 패키지를 설치한다: `python -m pip install -r requirements.txt`
-   - `nk.bat`은 환경 변수 `NK_PYTHON`에 적힌 python.exe, `C:\kohya_ss\venv`, PATH의 `python` 순서로 파이썬을 찾는다.
+   - `nk.bat`은 환경 변수 `NK_PYTHON`에 적힌 python.exe, 이 패키지가 깔린 PATH의 `python`, `C:\kohya_ss\venv` 순서로 파이썬을 찾는다.
 3. ComfyUI를 설치하고 위 모델을 넣은 다음 켜 둔다. LoRA 캐릭터를 쓰려면 Impact Pack도 깐다.
 4. 처음 한 번은 PowerShell 창에서 아무 명령이나 실행해서 사용 정책에 동의한다 (예: `.\nk.bat list`). `작업실.bat`을 더블클릭해도 같은 동의 화면이 나온다.
 5. 캐릭터를 추가한다. 저장소에는 캐릭터 파일 없이 양식(`characters/_template.yaml`)만 있다. `AI_캐릭터_만들기.md`를 AI 채팅에 첨부하고 캐릭터를 설명하면 캐릭터 파일을 대신 써 준다. 직접 쓰는 방법은 [docs/ADDING.md](docs/ADDING.md)에 있다.
@@ -160,7 +160,7 @@ The required model files total about 7.4 GB.
 | Qwen-Image-Edit 2509 (fp8) + `qwen_2.5_vl_7b_fp8_scaled` | editing a cut with a sentence, adding props, merging two characters |
 | [comfyui-tooling-nodes](https://github.com/Acly/comfyui-tooling-nodes) | some experimental two-character modes |
 | Tagger `models/wd-eva02-large-tagger-v3/` (ONNX), DWPose `models/dwpose/dw-ll_ucoco_384.onnx`, anime-seg `models/animeseg/isnetis.onnx` | tag checks, skeletons, cutting out characters |
-| [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) (default location `C:\kohya_ss`, otherwise set the `NK_KOHYA` environment variable) | training a LoRA of your own character |
+| [kohya_ss](https://github.com/bmaltais/kohya_ss) with sd-scripts (default location `C:\kohya_ss`, otherwise set the `NK_KOHYA` environment variable) | training a LoRA of your own character ([docs/TRAINING.md](docs/TRAINING.md), Korean) |
 | Tag lists `tags/danbooru.csv`, `tags/e621.csv` ([a1111-sd-webui-tagcomplete](https://github.com/DominikDoom/a1111-sd-webui-tagcomplete)) | tag checks, character lookup ([docs/ADDING.md](docs/ADDING.md) section 4) |
 
 - To list the installed ComfyUI nodes: `nk ep nodes` (read-only)
@@ -170,7 +170,7 @@ The required model files total about 7.4 GB.
 
 1. Download this repository (Code → Download ZIP, or `git clone`).
 2. Python packages: `python -m pip install -r requirements.txt`
-   - `nk.bat` looks for Python in this order: the `NK_PYTHON` environment variable (path to python.exe) → `C:\kohya_ss\venv` → `python` on PATH.
+   - `nk.bat` looks for Python in this order: the `NK_PYTHON` environment variable (path to python.exe) → `python` on PATH if these packages are installed there → `C:\kohya_ss\venv`.
 3. Install ComfyUI and add the models above (plus Impact Pack if you use a LoRA character). Keep ComfyUI running.
    A step-by-step beginner guide (Korean only): [docs/QUICKSTART.md](docs/QUICKSTART.md).
 4. Run any command once in a terminal (PowerShell) and **accept the use policy** (type `agree`): `.\nk.bat list`

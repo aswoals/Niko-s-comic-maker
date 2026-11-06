@@ -6,7 +6,9 @@
 /_labels/
 /_nk/
 /progress/
-/training/
+/training/*
+!/training/example_anima.yaml
+!/training/example_dataset.toml
 /workflows/
 /character/
 /tags/*.csv

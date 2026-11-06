@@ -39,8 +39,8 @@ AMD, 인텔 그래픽카드나 맥은 시험 안 해 봤음. 아마 안 될 거�
 
 ### 2-1. 파이썬 설치
 
-1. [python.org/downloads/windows](https://www.python.org/downloads/windows/) 들어가서 **Python 3.13.x** 항목의 `Windows installer (64-bit)` 받기.
-   맨 위에 있는 최신판(3.15 같은 거) 말고 3.13 추천함. 필요한 패키지가 다 확실히 깔리는 버전이라서.
+1. [Python 3.11.9 설치 파일](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe) 받기 (누르면 바로 받아짐).
+   python.org 맨 위의 최신판(3.15 같은 거) 말고 3.11.9 추천함. 필요한 패키지가 다 깔리고, 나중에 LoRA 학습([TRAINING.md](TRAINING.md))을 할 때 쓰는 kohya_ss도 이 버전을 씀.
 2. 설치 파일 실행하면 첫 화면 맨 아래에 `Add python.exe to PATH` 체크박스가 있음. **이거 꼭 체크하고** `Install Now` 누르기.
    이거 빼먹으면 나중에 명령어가 안 먹음. 여기서 제일 많이 막힘.
 
@@ -176,10 +176,10 @@ ComfyUI 켜 두고 작업실 화면에서 함.
 | `YAML을 못 찾음`, `'pages:' 가 없음` | AI 답을 일부만 복사했거나 줄거리만 받은 상태임. 전체 복사하기, 줄거리였으면 '좋아'라고 해서 계획표 받기 |
 | 기록에 `Value not in list` | 모델 파일 이름이나 넣은 폴더가 틀림. 2-3 표랑 똑같은지 확인 |
 | 기록에 `out of memory` | 그래픽 메모리 부족. 게임, 영상, 다른 AI 프로그램 끄고 다시 |
-| 캐릭터가 안 닮음 | 캐릭터 파일의 태그랑 `anima` 문장을 더 자세히. 그래도 안 되면 LoRA 학습 ([ADDING.md](ADDING.md) 방법 C) |
+| 캐릭터가 안 닮음 | 캐릭터 파일의 태그랑 `anima` 문장을 더 자세히. 그래도 안 되면 LoRA 학습 ([TRAINING.md](TRAINING.md)) |
 
 ## 7. 더 해 볼 거
 
-- 내 캐릭터 LoRA 쓰기: [ADDING.md](ADDING.md) 방법 C. LoRA 캐릭터가 나오는 두 명 컷은 ComfyUI 확장 Impact Pack이 따로 필요함.
+- 내 캐릭터 LoRA 학습하고 쓰기: [TRAINING.md](TRAINING.md). LoRA 캐릭터가 나오는 두 명 컷은 ComfyUI 확장 Impact Pack이 따로 필요함.
 - 말로 컷 고치기, 자동 검수: [Ollama](https://ollama.com/) 깔고 `gemma4:e4b-it-qat` 모델 받기.
 - 명령어로 쓰기: 키트 폴더 터미널에서 `.\nk.bat --help`. 자세한 건 [README](../README.md)랑 [nk_guide.md](../nk_guide.md).

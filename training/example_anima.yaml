@@ -1,0 +1,25 @@
+# Anima 캐릭터 LoRA 학습 설정 예시 (설명: docs/TRAINING.md)
+# 복사해서 이름을 바꿔 쓴다 (예: training/fox.yaml). 먼저 확인: .\nk.bat ep trainanima training/fox.yaml --dry
+# 값은 sd-scripts 문서(docs/anima_train_network.md)의 예시에 8GB 그래픽카드용 blocks_to_swap 을 더한 것.
+
+output_name: fox_anima_v1                        # 결과 LoRA 이름. training/output/ 에 생기고 ComfyUI models/loras 로 복사된다
+dataset_config: training/example_dataset.toml    # 학습 그림 설정 파일 (키트 폴더 기준 경로)
+
+dit: anima-base-v1.0.safetensors                 # ComfyUI models/diffusion_models 안의 파일
+qwen3: qwen_3_06b_base.safetensors               # models/text_encoders
+vae: qwen_image_vae.safetensors                  # models/vae
+
+dim: 16
+alpha: 1.0                                       # lr 1e-4 는 alpha 1.0 기준 (sd-scripts 문서)
+lr: 1.0e-4
+optimizer: AdamW8bit
+scheduler: constant
+timestep_sampling: sigmoid
+flow_shift: 1.0
+
+epochs: 10
+save_every: 2                                    # 2, 4, 6, 8, 10 에포크마다 저장. 다 그려 보고 제일 나은 걸 고른다
+blocks_to_swap: 12                               # 8GB 그래픽카드용. 메모리가 모자라면 올린다 (최대값은 모델마다 다름, 28블록 모델은 26)
+seed: 42
+
+# masked_loss: true                              # PNG 의 투명한 곳은 배우지 않음. 쓰려면 데이터 설정에 alpha_mask = true 도 같이
