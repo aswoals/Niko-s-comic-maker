@@ -1,0 +1,51 @@
+# tools/pose3d 사람(성인) 체형 설정 (약 7.5등신). 단위: 가장 큰 사람 키 = 1.0
+# human: true 이면 고양이 귀·주둥이·꼬리를 안 붙임. 키 배율: a = 큰 사람(1.0), b = 상대 (예: 180cm 대 158cm -> 0.88)
+#   캐릭터 파일의 height_cm 이 있으면 그것으로 계산. 다른 캐릭터면 people 의 scale 만 바꿈
+body:
+  human: true
+  head_rx: 0.056
+  head_ry: 0.066
+  head_rz: 0.064
+  neck: 0.05
+  torso: 0.30
+  torso_rx: 0.085
+  torso_rz: 0.062
+  shoulder_w: 0.115
+  shoulder_drop: 0.02
+  upper_arm: 0.17
+  forearm: 0.15
+  arm_r: 0.026
+  paw_r: 0.032
+  hip_w: 0.055
+  thigh: 0.245
+  shin: 0.24
+  thigh_r: 0.05
+  shin_r: 0.034
+  foot: 0.13              # 발 크게 (발 방향이 조종 그림에 보이게)
+  foot_r: 0.03
+  ear_len: 0.0
+  ear_r: 0.0
+  muzzle: 0.012
+  tail_seg: 0.0
+  tail_r: 0.0
+
+people:
+  a: {scale: 1.0}
+  b: {scale: 0.88}
+
+camera:
+  yaw: 20
+  pitch: 8
+  dist: null
+  fov: 35               # 세로 화각(도). 작을수록 망원(원근 약함)
+  margin: 1.12          # 자동 거리일 때 여백 배율
+
+# 출력
+image:
+  width: 512
+  height: 640
+  depth_far: 40         # 깊이 그림에서 가장 먼 몸 부분의 밝기 (0~255, 배경은 0)
+  line_px: 2            # 선화 굵기
+  person_colors:        # 사람별 틀 색 (a, b)
+    - [255, 80, 80]
+    - [80, 140, 255]

@@ -1,0 +1,126 @@
+# ============================================================
+#  presets.yaml — nk 명령의 모든 조정값은 여기서 바꾼다.
+#  ComfyUI 노드를 손으로 만질 일 없음. 값 바꾸고 저장하면 다음 nk 실행부터 반영.
+#  ※ 이 프로그램은 전연령(safe) 그림만 만든다 (USE_POLICY.md). rating 은 바꿔도 safe 로 고정된다.
+# ============================================================
+
+# ComfyUI 서버 주소. auto = 8000(Comfy Desktop) → 8188(일반 ComfyUI) 순서로 자동 탐색
+server: auto
+
+# NoobAI 흐름(--render noob)에서 쓰는 그림 모델 파일 이름 (ComfyUI models/checkpoints 안)
+checkpoint: noobaiXLNAIXL_vPred10Version.safetensors
+
+# 결과 저장 위치 (상대 경로면 키트 폴더 기준). ComfyUI output 폴더에도 남지만, nk는 여기로 복사 + meta.json 기록
+output_root: runs
+
+# ---------- 기본값 (명령 옵션으로 개별 덮어쓰기 가능) ----------
+defaults:
+  width: 832
+  height: 1216
+  steps: 30
+  cfg: 4.5
+  cfg_rescale: 0.2           # 색 진하기 누르기 (0 = 끔, 0.2 = 모델 권장, 0.7 = 밝고 담백)
+  sampler: euler
+  scheduler: normal          # v-pred 모델이라 karras 계열 금지
+  quality: "on"              # on/off — off면 quality_tags 를 안 넣음 (그림체 실험용)
+  quality_tags: masterpiece, best quality, newest, absurdres, highres
+  negative: worst quality, old, early, low quality, lowres, signature, username, logo, bad hands, mutated hands, text, watermark, extra arms, extra hands, extra limbs, bad anatomy, cub, young, child, loli, shota
+  rating: safe               # 전연령 전용 — 다른 값은 무시됨
+  year: ""                   # 예: 2023 → "year 2023" 태그 추가 (그림체 연도 실험용)
+  artist_weight: 1.0         # (by 작가:가중치)
+  artist_position: front     # front = 품질태그 바로 뒤 / back = 맨 끝
+  tags: short                # short = 트리거+체형만 / full = 외형 태그 전부 (characters/*.yaml 참고)
+  hires: 0                   # 2단계 확대 배율. 0 = 끔 / 1.5 = 832x1216 → 1248x1824 (장당 시간 약 2.5배, 8GB에서 1.5까지 안전)
+  hires_method: pixel        # pixel = 그림으로 풀어서 lanczos 확대 후 다시 그림 (선 깔끔) / model = 업스케일 모델 사용 / latent = 옛 방식(선 난잡해짐)
+  upscale_model: ""          # hires_method: model 일 때 models/upscale_models 안 파일명
+  hires_denoise: 0.35        # 2단계에서 다시 그리는 정도 (0.25 = 거의 확대만 / 0.5 = 디테일 많이 바뀜)
+  hires_steps: 20
+  final_hires: 1.5           # nk run 에서 합격작을 다시 그릴 때 확대 배율
+
+# ---------- 작가(그림체) ----------
+# 작가 이름은 직접 추가한다 (docs/ADDING.md). Danbooru/e621 의 작가 태그 이름을 그대로 쓴다 (밑줄은 띄어쓰기).
+# main_artists: Grok 첨부 파일의 '쓸 작가' 목록 + 계획표 검사가 태그 사전 없이도 받아 주는 이름. 첫 작가가 기본.
+#   예: main_artists: [artist name one, artist name two]
+main_artists: []
+# artist_note: (선택) Grok 첨부 파일에 넣을 작가 안내 글. 비우면 기본 안내.
+
+# ---------- 프리셋: nk gen --preset 이름 ----------
+# 여러 개 겹치기: --preset mystyle,hq  (뒤에 것이 앞을 덮어씀)
+# 주의: 쉼표가 들어가는 값은 반드시 따옴표 "..." 로 감쌀 것
+presets:
+  # 작가 프리셋 예 (직접 추가):  mystyle: {artist: "artist name", artist_weight: 1.0}
+  # 그림체 계열 (작가 없이)
+  toony:         {extra: "toony, flat colors, thick outline"}
+  sketch:        {extra: "sketch, monochrome", quality: "off"}
+  # 실험용
+  raw:           {quality: "off", cfg: 3.5}     # 작가 그림체 최대한 살리기
+  hq:            {hires: 1.5}                    # 최종본용: 2단계 확대 (nk gen --preset mystyle,hq)
+
+# ---------- 장면: nk gen --scene 이름  (이름이 없으면 입력한 문자열을 그대로 태그로 씀) ----------
+scenes:
+  white:    solo, full body, standing, simple background, white background, looking at viewer
+  cafe:     solo, sitting, cafe, window, holding cup, smile
+  street:   solo, standing, city, night, neon lights, looking back
+  forest:   solo, close-up, forest, sunlight, dappled light, smile
+  bench:    solo, sitting, park bench, autumn, falling leaves
+  run:      solo, running, jumping, motion lines, dynamic pose
+  bed:      solo, lying, on back, bed, pillow, relaxed
+  beach:    solo, standing, beach, sunset, ocean, wind
+  class:    solo, classroom, desk, waving, smile
+  rear:     solo, rear view, looking back, full body, simple background
+
+# ---------- 디테일 QA (nk qa / nk run) — 로컬 VLM(Ollama)로 characters/*.yaml 체크리스트 판정 ----------
+qa:
+  ollama: http://127.0.0.1:11434
+  model: gemma4:e4b-it-qat   # 8GB 그래픽카드에 들어가는 크기. 더 큰 모델은 CPU로 넘어가 매우 느림
+  num_ctx: 4096              # 대화 기억 길이. 작을수록 VRAM 덜 씀 (QA는 4096이면 충분)
+  max_side: 896              # 보내기 전 축소 (속도). 얼굴은 따로 크롭하니 전신은 896이면 충분
+  temperature: 0
+  cpu: false                 # true = GPU 안 쓰고 CPU로 (학습 중 테스트용, 장당 30~90초). 명령에서 --cpu 로도 가능
+  face_pass: true            # 얼굴 항목(region: face)은 얼굴 크롭으로 2차 질문 (호출 2배, 정확도 ↑). --single 로 끔
+  keep_alive: 5m             # 판정 끝나고 VLM을 메모리에 유지하는 시간
+
+# ---------- 시트 기반 데이터 생성 (nk sheet) — 시트 img2img + 선화 ControlNet ----------
+# 캐릭터 시트 그림(앞·뒤)과 선화를 ComfyUI input 폴더에 넣고 파일 이름을 적는다.
+sheet:
+  controlnet: noob_lineart_anime_fp16.safetensors
+  cn_strength: 0.7
+  cn_end: 0.8                # ControlNet을 몇 %까지 적용 (0.8 = 마지막 20%는 자유)
+  denoise: 0.75              # 0.7 = 색 안전 / 0.85 = 그림체 ↑ 색 ↓ / 1.0 = 색 잃음
+  extra: ""
+  negative_extra: ""
+  output_prefix: sheet_nk
+  views:
+    front: {image: mychar_front.png, lineart: mychar_lineart_front.png, tags: "solo, standing, arms out, front view, full body, simple background, white background, looking at viewer"}
+    back:  {image: mychar_back.png,  lineart: mychar_lineart_back.png,  tags: "solo, standing, arms out, rear view, from behind, full body, simple background, white background"}
+
+# ---------- 웹툰 (nk ep ...) — 글콘티는 episodes/<화>/conti.yaml ----------
+webtoon:
+  width: 800                 # 세로 스트립 가로 폭 (웹툰 권장 800~960)
+  margin: 40                 # 컷 좌우 여백
+  gap: 120                   # 컷 사이 간격 (컷마다 conti에서 gap_after 로 바꿀 수 있음)
+  top: 80                    # 맨 위·맨 아래 여백
+  border: 3                  # 컷 테두리 두께 (0 = 없음)
+  font: C:/Windows/Fonts/malgunbd.ttf   # 한글 폰트 (맑은 고딕 굵게). 다른 폰트 쓰려면 .ttf 경로
+  font_size: 26              # 대사 글자 크기 (효과음은 1.6배)
+  line: 3                    # 말풍선 선 두께
+  slice_height: 1600         # 업로드용으로 자를 높이 (스트립을 이 높이로 잘라 _01, _02 ... 저장)
+
+# ---------- 일본식 페이지 만화 (conti.yaml 에 format: page) ----------
+manga:
+  width: 1600                # 페이지 가로 px (웹용). 세로 = 가로 × ratio
+  ratio: 1.412               # B5 (257/182)
+  margin: 70                 # 페이지 바깥 여백
+  gutter: 24                 # 컷 사이 간격
+  border: 4                  # 컷 테두리 두께
+  font: C:/Windows/Fonts/malgunbd.ttf
+  font_size: 30
+  line: 3
+  bubble_w: 0.3              # 말풍선 최대 폭 = 컷 폭 × 0.3 (좁을수록 세로로 긴 일본식 풍선)
+
+# ---------- Anima 그리기 빠르게 (기본 꺼짐) ----------
+# ComfyUI 에 이미 있는 가속 노드를 그림 설정에 붙임 (설치·재시작 없음, 다음 그림부터).
+# 그림이 이상하면 (노이즈·깨짐·디테일 뭉개짐) 그 줄을 false 로 바꾸고 저장 -> 다음 그림부터 꺼짐
+anima_speed:
+  ck_attention: false        # Comfy Kitchen INT8 어텐션 — 혼자 컷·두 명 컷·부위 다시 그리기 모두. 긴 글에서 노이즈가 나온다는 보고가 있음
+  easycache: false           # EasyCache (비슷한 걸음 결과를 다시 씀) — 혼자 컷·사람 없는 컷만

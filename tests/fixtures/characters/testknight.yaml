@@ -1,0 +1,23 @@
+# 시험용 가짜 캐릭터 (사람 기사 예시). 실제 캐릭터가 아님.
+name: testknight
+trigger: testknight, knight girl
+name_ko: 테스트나이트 (시험용)
+height_cm: 158
+personality: 용감하고 큰 소리로 말함.
+lora:
+tags_short: "1girl, blonde hair, ponytail, silver armor, blue cape"
+tags_full: "1girl, blonde hair, ponytail, blue eyes, silver armor, blue cape, gauntlets"
+compose_name: knight girl
+anima: "A short knight girl with a blonde ponytail, blue eyes, silver armor and a blue cape."
+anima_head: "knight girl head, blonde ponytail, blue eyes"
+negative_extra: "animal ears, furry, weapon on back, long skirt"
+duo_exclusive: "silver armor, blue cape"
+mask_grow: 1.3
+mask_cap: 1.2
+qa_desc: "a knight girl in silver armor"
+qa_checklist:
+  - id: text
+    must: true
+    q: "Is there any text in the picture?"
+    options: ["no text at all", "there is text or a signature or watermark"]
+    expect: ["no text"]

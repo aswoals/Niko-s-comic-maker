@@ -1,0 +1,25 @@
+# 시험용 가짜 캐릭터 (사람 남자 예시). 실제 캐릭터가 아님.
+name: testman
+trigger: testman, adult man
+name_ko: 테스트맨 (시험용)
+height_cm: 180
+personality: 무뚝뚝하지만 속은 착함.
+lora:
+sam_find: man with black hair
+compose_name: tall man with black hair and a grey coat
+tags_short: "1boy, male focus, black hair, grey coat, scarf"
+tags_full: "1boy, male focus, adult, tall, black hair, short hair, grey eyes, grey coat, red scarf, boots"
+anima: "A tall adult man with short black hair, grey eyes, a long grey coat, a red scarf and boots."
+anima_upper: "upper body of a tall adult man, short black hair, grey eyes, grey coat, red scarf"
+anima_head: "adult man head, short black hair, grey eyes"
+negative_extra: "animal ears, furry"
+duo_exclusive: "grey coat, red scarf"
+mask_grow: 1.35
+mask_cap: 1.25
+qa_desc: "a tall man with black hair in a grey coat"
+qa_checklist:
+  - id: text
+    must: true
+    q: "Is there any text in the picture?"
+    options: ["no text at all", "there is text or a signature or watermark"]
+    expect: ["no text"]

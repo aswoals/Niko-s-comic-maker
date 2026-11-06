@@ -1,0 +1,9 @@
+# nk 만화 제작기 — 파이썬 패키지 (Python 3.10+)
+# 설치: python -m pip install -r requirements.txt
+pyyaml
+numpy
+pillow
+opencv-python
+onnxruntime          # 판별기·뼈대·캐릭터 잘라내기 (GPU 로 돌리려면 onnxruntime-gpu)
+scipy                # (선택) nk ep layer
+safetensors          # (선택) nk ep lorablock

@@ -1,0 +1,86 @@
+# Grok 첨부 파일 예시: 형식·리듬만 보여 주는 2쪽 계획표 (캐릭터·이야기는 지어낸 것)
+title: "우산 하나"
+pages_wanted: 2
+cast: {hero: mychar, buddy: buddy}
+main: hero
+artist: ""
+locations:
+  street: "street, road, rain, puddle, overcast, outdoors, day"
+  shop: "shop, awning, rain, outdoors, day"
+props:
+  umbrella: {tags: "yellow umbrella", qa: true}
+pages:
+  - note: "기·승 — 갑자기 비가 와서 여우 소년이 가게 차양 밑에 갇히고, 토끼 소녀가 노란 우산을 들고 지나간다"
+    cuts:
+      - who: []
+        shot: wide
+        loc: street
+        action: "rain, puddle, street"
+        lines:
+          - {kind: narration, text: "갑자기 쏟아진 비."}
+          - {kind: sfx, text: "쏴아아", style: brush}
+      - who: [hero]
+        shot: knee
+        angle: eye
+        loc: shop
+        action: "standing, worried, wet"
+        scene: "The fox boy stands under a shop awning with his arms crossed against the cold, looking up at the rain."
+        lines:
+          - {who: hero, kind: aside, text: "우산 놓고 왔는데…"}
+      - who: [buddy]
+        shot: full
+        angle: low
+        loc: street
+        action: "walking, smile, holding umbrella"
+        props: [umbrella]
+        show: ["The rabbit girl holds a yellow umbrella"]
+        scene: "The rabbit girl walks along the wet street holding a yellow umbrella over her head with her right hand."
+        lines:
+          - {who: buddy, text: "어? 거기서 뭐 해?"}
+      - who: [hero]
+        shot: face
+        angle: eye
+        bg: simple
+        action: "blush, embarrassed, sweatdrop"
+        scene: "Close-up of the fox boy's embarrassed face, a drop of sweat on his cheek."
+        lines:
+          - {who: hero, text: "그, 그냥… 비 구경."}
+  - note: "전·결 — 둘이 우산 하나를 같이 쓰고 걷다가, 비가 그치고 무지개가 뜬다"
+    cuts:
+      - who: [hero, buddy]
+        shot: full
+        angle: eye
+        loc: street
+        action: "walking, sharing umbrella"
+        roles: {hero: "blush, looking away", buddy: "smile, holding umbrella"}
+        props: [umbrella]
+        scene: "The rabbit girl holds the yellow umbrella over both of them as they walk side by side. The fox boy looks away, blushing."
+        lines:
+          - {who: buddy, text: "같이 가자."}
+          - {who: hero, kind: whisper, text: "…고마워."}
+      - who: []
+        shot: detail
+        loc: street
+        action: "puddle, reflection, rain"
+        lines:
+          - {kind: sfx, text: "찰박", style: heavy}
+      - who: [buddy]
+        shot: waist
+        angle: side
+        loc: street
+        action: "looking up, surprised, open mouth"
+        scene: "The rabbit girl tilts the umbrella back and looks up at the sky with her mouth open."
+        lines:
+          - {who: buddy, kind: shout, text: "봐! 그쳤어!"}
+      - who: [hero, buddy]
+        shot: wide
+        angle: low
+        loc: street
+        big: true
+        action: "rainbow, blue sky, looking up, smile"
+        roles: {hero: "smile", buddy: "smile, holding umbrella"}
+        props: [umbrella]
+        show: ["There is a rainbow in the sky"]
+        scene: "Seen from low behind, the two of them stand on the wet street looking up at a big rainbow across the clearing sky."
+        lines:
+          - {kind: narration, text: "우산이 하나라서 다행이었다."}

@@ -1,0 +1,27 @@
+# 시험용 가짜 캐릭터 (LoRA 없는 퍼리 캐릭터 예시). 실제 캐릭터가 아님.
+name: testgoat
+trigger: testgoat
+name_ko: 테스트고트 (시험용)
+personality: 수줍고 친절함. 존댓말.
+lora:
+tags_short: "1boy, furry, anthro, goat boy, white fur, small horns, round glasses, blue cloak"
+tags_full: "1boy, furry, anthro, goat boy, white fur, small horns, floppy ears, round glasses, blue cloak, long sleeves"
+compose_name: white goat boy
+anima: "A gentle white anthro goat boy with small horns, floppy ears, round glasses and a long blue cloak."
+anima_head: "white anthro goat boy head, small horns, floppy ears, round glasses"
+negative_extra: "human, cat ears"
+duo_exclusive: "blue cloak, round glasses, small horns"
+mask_grow: 1.8
+mask_cap: 1.4
+qa_desc: "a white goat boy in a blue cloak"
+qa_checklist:
+  - id: g_fur
+    must: true
+    q: "What color is this character's fur?"
+    options: ["white or cream", "another color", "not visible"]
+    expect: ["white or cream", "not visible"]
+  - id: g_cloak
+    must: true
+    q: "What is this character wearing?"
+    options: ["a long blue cloak", "something else"]
+    expect: ["a long blue cloak"]

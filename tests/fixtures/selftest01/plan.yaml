@@ -1,0 +1,46 @@
+# selftest 시험 편 — 가짜 ComfyUI·가짜 검수 AI로 nk ep auto 전체를 도는 데만 씀. 그림 품질과 무관.
+# 구성: 풍경 1 + 혼자 컷 2 (hero·buddy, 시험용 가짜 캐릭터) + 두 명 컷 1. 형식은 docs/prompt_plan.md 그대로.
+title: "시험 편"
+pages_wanted: 1
+cast: {hero: testcat, buddy: testgoat}
+main: hero
+artist: ""
+restyle: picturebook
+locations:
+  park: "park, grass, tree, blue sky, outdoors, day"
+props:
+  ball: {tags: "ball", qa: true}
+pages:
+  - note: "기승전결 한 쪽 — 공원에서 공을 주고받음"
+    cuts:
+      - who: []
+        shot: wide
+        loc: park
+        action: "tree, sunlight"
+        lines:
+          - {kind: narration, text: "맑은 날의 공원."}
+      - who: [hero]
+        shot: knee
+        angle: low
+        loc: park
+        action: "holding, grin"
+        props: [ball]
+        show: ["The grey cat holds a ball"]
+        lines:
+          - {who: hero, text: "공 놀이 하자!"}
+      - who: [buddy]
+        shot: waist
+        angle: side
+        loc: park
+        action: "smile, open mouth"
+        lines:
+          - {who: buddy, text: "좋아요!"}
+      - who: [hero, buddy]
+        shot: full
+        angle: eye
+        loc: park
+        action: "looking at another"
+        roles: {hero: "grin, standing", buddy: "smile, standing"}
+        lines:
+          - {who: hero, text: "간다~"}
+          - {who: buddy, text: "받았다!"}

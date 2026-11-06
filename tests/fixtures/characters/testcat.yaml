@@ -1,0 +1,61 @@
+# 시험용 가짜 캐릭터 (LoRA 캐릭터 예시). 실제 캐릭터가 아님 — 시험이 쓰는 칸을 모두 채움.
+name: testcat
+trigger: testcat
+name_ko: 테스트캣 (시험용)
+personality: 느긋하고 다정함. 짧게 말함.
+lora: testcat_v1.safetensors
+lora_strength: 1.0
+tags_short: "1boy, furry, anthro, cat boy, grey fur, white muzzle, green eyes, orange scarf"
+tags_full: "1boy, furry, anthro, cat boy, grey fur, white muzzle, white belly, green eyes, pointy ears, long tail, grey tail, orange scarf, short sleeves"
+forbid: "human ears, extra tail"
+compose_name: grey cat boy
+anima: "A slim grey anthro cat boy with a white muzzle, green eyes, pointy ears, a long grey tail and an orange scarf."
+anima_head: "grey anthro cat boy head, white muzzle, green eyes, pointy ears"
+anima_face: "close-up of a grey anthro cat boy face, white muzzle, green eyes, pointy grey ears"
+anima_face_neg: "human face, extra ears"
+anima_chest: "grey anthro cat boy chest with a white belly patch and an orange scarf"
+anima_upper: "upper body of a grey anthro cat boy, white muzzle, green eyes, orange scarf, short sleeves"
+anima_lora: testcat_anima_v1.safetensors
+anima_lora_strength: 1.0
+anima_face_pass: false
+anima_lora_desc: "a grey anthro cat boy, white muzzle, green eyes, orange scarf, long grey tail"
+anima_back: "grey anthro cat boy seen from behind, long grey tail, orange scarf knot"
+anima_find: grey cat
+repaint_grow: 2.0
+repaint_cap: 1.2
+repaint_blur: 0.035
+back_ref: character/testcat_back.png
+back_name: the grey cat
+back_kind: cat
+back_desc: "plain grey fur on the back, a long grey tail, the knot of an orange scarf at the neck"
+facefix:
+  tags: "grey fur, white muzzle, green eyes"
+  neg: "human face"
+  drop: "orange scarf"
+  good:
+    facial_mark: 0.6
+  bad: "human, glasses"
+  bad_max: 0.3
+negative_extra: "human, glasses, hat"
+qa_checklist:
+  - id: ears
+    must: true
+    region: head
+    q: "How many cat ears does the character have?"
+    options: ["two clean cat ears", "missing or extra ears", "not visible"]
+    expect: ["two clean", "not visible"]
+  - id: scarf
+    must: true
+    q: "What is around the character's neck?"
+    options: ["an orange scarf", "nothing", "something else"]
+    expect: ["an orange scarf"]
+  - id: fingers
+    must: true
+    q: "Are the hands clean?"
+    options: ["clean fingers", "broken or extra fingers", "not visible"]
+    expect: ["clean fingers", "not visible"]
+  - id: text
+    must: true
+    q: "Is there any text in the picture?"
+    options: ["no text at all", "there is text or a signature or watermark"]
+    expect: ["no text"]

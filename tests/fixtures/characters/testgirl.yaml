@@ -1,0 +1,22 @@
+# 시험용 가짜 캐릭터 (사람 소녀 예시). 실제 캐릭터가 아님.
+name: testgirl
+trigger: testgirl
+name_ko: 테스트걸 (시험용)
+personality: 밝고 씩씩함.
+lora:
+tags_short: "1girl, short hair, brown hair, yellow raincoat, red boots"
+tags_full: "1girl, short hair, brown hair, brown eyes, yellow raincoat, red boots, backpack"
+compose_name: girl in a yellow raincoat
+anima: "A small girl with short brown hair, brown eyes, a yellow raincoat, red boots and a backpack."
+anima_head: "small girl head, short brown hair, brown eyes"
+negative_extra: "animal ears, furry"
+duo_exclusive: "yellow raincoat, red boots"
+mask_grow: 1.3
+mask_cap: 1.2
+qa_desc: "a small girl in a yellow raincoat"
+qa_checklist:
+  - id: text
+    must: true
+    q: "Is there any text in the picture?"
+    options: ["no text at all", "there is text or a signature or watermark"]
+    expect: ["no text"]
