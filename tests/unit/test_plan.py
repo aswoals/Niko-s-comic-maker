@@ -321,7 +321,7 @@ def test_paste_refuses_episode_with_drawn_cuts(tmp_path, monkeypatch):
 
 
 def test_ai_char_rows_skip_hidden(tmp_path, monkeypatch):
-    """ai_hide 캐릭터는 AI 첨부 파일 목록에서 뺌"""
+    """ai_hide 캐릭터는 글콘티용 첨부 파일 목록에서 뺌"""
     import nk_easy
     monkeypatch.setenv("NK_CHARS", str(tmp_path / "characters"))
     (tmp_path / "characters").mkdir()

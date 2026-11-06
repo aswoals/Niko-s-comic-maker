@@ -12,7 +12,7 @@
 /tags/*.csv
 /characters/*.yaml
 !/characters/_template.yaml
-/AI_첨부용.md
+/AI_글콘티_만들기.md
 /.nk_agreed
 
 # 그림·모델 파일

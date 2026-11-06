@@ -33,7 +33,7 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
 | Anima 그림 모델 3개 ([circlestone-labs/Anima](https://huggingface.co/circlestone-labs/Anima)의 `split_files` 폴더): `anima-base-v1.0.safetensors` → `models/diffusion_models`, `qwen_3_06b_base.safetensors` → `models/text_encoders`, `qwen_image_vae.safetensors` → `models/vae` | 기본 그리기 (`nk ep auto`) |
 | Anima-LLLite 2개 ([Comfy-Org/Anima-LLLite](https://huggingface.co/Comfy-Org/Anima-LLLite)의 `model_patches` 폴더): `anima-lllite-depth-1.safetensors`, `anima-lllite-any-test-like-v2.safetensors` → `models/model_patches` | 3D 인형으로 자세 잡기. 기본으로 켜져 있다 |
 | SAM 3.1 ([Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1)): `checkpoints/sam3.1_multiplex_fp16.safetensors` → `models/checkpoints` | 캐릭터 자리 찾기 |
-| AI 채팅 아무거나 (ChatGPT, Gemini 등. 무료판도 된다) | 계획표(글콘티) 쓰기. `AI_첨부용.md`를 첨부해서 쓴다 |
+| AI 채팅 아무거나 (ChatGPT, Gemini 등. 무료판도 된다) | 캐릭터 만들기와 계획표(글콘티) 쓰기. `AI_캐릭터_만들기.md`, `AI_글콘티_만들기.md`를 첨부해서 쓴다 |
 | 캐릭터 파일 1개 이상 (`characters/`) | 등장인물 ([docs/ADDING.md](docs/ADDING.md)) |
 
 필수 모델 파일은 합쳐서 7.4GB쯤 된다.
@@ -62,15 +62,15 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
    - `nk.bat`은 환경 변수 `NK_PYTHON`에 적힌 python.exe, `C:\kohya_ss\venv`, PATH의 `python` 순서로 파이썬을 찾는다.
 3. ComfyUI를 설치하고 위 모델을 넣은 다음 켜 둔다. LoRA 캐릭터를 쓰려면 Impact Pack도 깐다.
 4. 처음 한 번은 PowerShell 창에서 아무 명령이나 실행해서 사용 정책에 동의한다 (예: `.\nk.bat list`). `작업실.bat`을 더블클릭해도 같은 동의 화면이 나온다.
-5. 캐릭터를 추가한다. 저장소에는 캐릭터 파일 없이 양식(`characters/_template.yaml`)만 있다. 방법은 [docs/ADDING.md](docs/ADDING.md)에 있다.
+5. 캐릭터를 추가한다. 저장소에는 캐릭터 파일 없이 양식(`characters/_template.yaml`)만 있다. `AI_캐릭터_만들기.md`를 AI 채팅에 첨부하고 캐릭터를 설명하면 캐릭터 파일을 대신 써 준다. 직접 쓰는 방법은 [docs/ADDING.md](docs/ADDING.md)에 있다.
 
 ## 쓰는 법
 
 - 작업실(화면): `작업실.bat`을 더블클릭하면 브라우저에 `http://127.0.0.1:8765`가 열린다. 새 만화, 이어서 만들기, 컷 다시 그리기, 결과 보기를 여기서 한다. 이 PC에서만 열린다.
-- 메뉴: `만화만들기.bat`을 켜고 번호를 고른다. 1 AI 첨부 파일 만들기 / 2 AI 답 붙여 넣기 / 3 만들기 / 4 컷 고치기 / 5 대사만 / 6 결과 / 7 캐릭터 추가
+- 메뉴: `만화만들기.bat`을 켜고 번호를 고른다. 1 글콘티용 첨부 파일 만들기 / 2 AI 답 붙여 넣기 / 3 만들기 / 4 컷 고치기 / 5 대사만 / 6 결과 / 7 캐릭터 추가
 - 명령:
   ```
-  .\nk.bat ep aifile          # AI_첨부용.md 만들기 -> AI 채팅 새 대화에 첨부하고 만들고 싶은 만화를 한국어로 요청
+  .\nk.bat ep aifile          # AI_글콘티_만들기.md 만들기 -> AI 채팅 새 대화에 첨부하고 만들고 싶은 만화를 한국어로 요청
   .\nk.bat ep paste ep01        # 복사해 둔 AI 답을 episodes/ep01/plan.yaml 로 저장 + 검사
   .\nk.bat ep auto ep01         # 처음부터 끝까지: 콘티 -> 그리기 -> 고치기 -> 말풍선 -> 검토
   .\nk.bat ep fix ep01 3 --add "smile"   # 3번 컷 태그를 고쳐서 그 컷만 다시
@@ -146,7 +146,7 @@ Request (free-form sentence) ─► an AI chat (any LLM) writes plan.yaml ─►
 | Anima image model, 3 files — in `split_files` of [circlestone-labs/Anima](https://huggingface.co/circlestone-labs/Anima): `anima-base-v1.0.safetensors` → `models/diffusion_models`, `qwen_3_06b_base.safetensors` → `models/text_encoders`, `qwen_image_vae.safetensors` → `models/vae` | default drawing (`nk ep auto`) |
 | Anima-LLLite, 2 files — in `model_patches` of [Comfy-Org/Anima-LLLite](https://huggingface.co/Comfy-Org/Anima-LLLite): `anima-lllite-depth-1.safetensors`, `anima-lllite-any-test-like-v2.safetensors` → `models/model_patches` | posing with a 3D doll (on by default in plans) |
 | SAM 3.1 — `checkpoints/sam3.1_multiplex_fp16.safetensors` from [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1) → `models/checkpoints` | finding where each character is |
-| Any AI chat such as ChatGPT or Gemini (free tier is fine) | writing the plan (attach `AI_첨부용.md`) |
+| Any AI chat such as ChatGPT or Gemini (free tier is fine) | making characters and writing the plan (attach `AI_캐릭터_만들기.md`, `AI_글콘티_만들기.md`) |
 | At least one character file (`characters/`) | the cast ([docs/ADDING.md](docs/ADDING.md)) |
 
 The required model files total about 7.4 GB.
@@ -174,17 +174,17 @@ The required model files total about 7.4 GB.
 3. Install ComfyUI and add the models above (plus Impact Pack if you use a LoRA character). Keep ComfyUI running.
    A step-by-step beginner guide (Korean only): [docs/QUICKSTART.md](docs/QUICKSTART.md).
 4. Run any command once in a terminal (PowerShell) and **accept the use policy** (type `agree`): `.\nk.bat list`
-5. Add your characters → [docs/ADDING.md](docs/ADDING.md) (Korean). No character files are included; `characters/_template.yaml` is the template.
+5. Add your characters. No character files are included; `characters/_template.yaml` is the template. Attach `AI_캐릭터_만들기.md` to an AI chat and describe your character, and it writes the character file for you. To write one by hand, see [docs/ADDING.md](docs/ADDING.md) (Korean).
 
 ### Usage
 
-Korean file names: `작업실.bat` = Workshop, `만화만들기.bat` = Make a comic, `AI_첨부용.md` = file to attach to the AI chat.
+Korean file names: `작업실.bat` = Workshop, `만화만들기.bat` = Make a comic, `AI_캐릭터_만들기.md` = character request file, `AI_글콘티_만들기.md` = storyboard request file (both are attached to an AI chat).
 
 - **Workshop (web UI)**: double-click `작업실.bat` → open `http://127.0.0.1:8765` in a browser — new comic, continue, redraw a cut, view results. It only opens on this PC.
-- **Menu**: `만화만들기.bat` — 1 make the AI attachment / 2 paste the AI's answer / 3 make / 4 fix a cut / 5 dialogue only / 6 results / 7 add a character
+- **Menu**: `만화만들기.bat` — 1 make the storyboard attachment / 2 paste the AI's answer / 3 make / 4 fix a cut / 5 dialogue only / 6 results / 7 add a character
 - **Commands**:
   ```
-  .\nk.bat ep aifile          # make AI_첨부용.md -> attach it to a new AI chat and describe the comic you want
+  .\nk.bat ep aifile          # make AI_글콘티_만들기.md -> attach it to a new AI chat and describe the comic you want
   .\nk.bat ep paste ep01        # save the copied AI answer as episodes/ep01/plan.yaml + check it
   .\nk.bat ep auto ep01         # start to finish: storyboard -> draw -> fix -> balloons -> review
   .\nk.bat ep fix ep01 3 --add "smile"   # change cut 3's tags and redraw only that cut

@@ -39,10 +39,10 @@ defaults:
 
 # ---------- 작가(그림체) ----------
 # 작가 이름은 직접 추가한다 (docs/ADDING.md). Danbooru/e621 의 작가 태그 이름을 그대로 쓴다 (밑줄은 띄어쓰기).
-# main_artists: AI 첨부 파일의 '쓸 작가' 목록 + 계획표 검사가 태그 사전 없이도 받아 주는 이름. 첫 작가가 기본.
+# main_artists: 글콘티용 첨부 파일의 '쓸 작가' 목록 + 계획표 검사가 태그 사전 없이도 받아 주는 이름. 첫 작가가 기본.
 #   예: main_artists: [artist name one, artist name two]
 main_artists: []
-# artist_note: (선택) AI 첨부 파일에 넣을 작가 안내 글. 비우면 기본 안내.
+# artist_note: (선택) 글콘티용 첨부 파일에 넣을 작가 안내 글. 비우면 기본 안내.
 
 # ---------- 프리셋: nk gen --preset 이름 ----------
 # 여러 개 겹치기: --preset mystyle,hq  (뒤에 것이 앞을 덮어씀)

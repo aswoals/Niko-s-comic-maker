@@ -16,6 +16,8 @@
 캐릭터 하나에 `characters/<영어이름>.yaml` 파일 하나다. 계획표와 콘티에서는 `cast: {짧은이름: 파일이름}` 식으로 부른다.
 
 ### 방법 A: 양식을 복사해서 직접 쓰기 (내 OC)
+직접 쓰기 귀찮으면 키트 폴더의 `AI_캐릭터_만들기.md`를 AI 채팅에 첨부하고 캐릭터를 설명하면 된다. 이 양식대로 파일을 써 준다.
+
 1. `characters/_template.yaml`을 복사해서 `characters/mychar.yaml`처럼 저장한다.
 2. 맨 위 `ai_hide: true` 줄을 지운다. 양식에만 있는 줄이고, 남겨 두면 캐릭터 목록에 안 나온다.
 3. 꼭 채울 칸은 `name`, `trigger`, `name_ko`, `personality`, `tags_short`, `tags_full`, `anima`, `compose_name`이다.
@@ -55,9 +57,9 @@ nk ep charadd <캐릭터_태그> --ko "한국어 이름" --save   # 초안이 �
 | `height_cm` | 두 명 컷 키 차이 (3D 인형) |
 | `hands: {tags, desc, expect}` | 손 색 검사 (`expect: dark` 또는 `bright`) |
 | `qa_checklist` | 자동 검수 질문. "있나?"가 아니라 "무슨 값인가?"로 묻는다 ([conti_rules.md](conti_rules.md) 4절) |
-| `ai_note`, `ai_hide` | AI 첨부 파일의 캐릭터 목록에 붙는 메모, 목록에서 숨기기 |
+| `ai_note`, `ai_hide` | 글콘티용 첨부 파일의 캐릭터 목록에 붙는 메모, 목록에서 숨기기 |
 
-캐릭터를 추가하거나 고친 뒤에는 AI 첨부 파일을 다시 만든다 (`nk ep aifile`, 또는 메뉴 1번).
+캐릭터를 추가하거나 고친 뒤에는 글콘티용 첨부 파일을 다시 만든다 (`nk ep aifile`, 또는 메뉴 1번).
 
 ---
 
@@ -67,7 +69,7 @@ nk ep charadd <캐릭터_태그> --ko "한국어 이름" --save   # 초안이 �
 
 `presets.yaml`에서:
 ```yaml
-main_artists: [artist name one, artist name two]    # AI 첨부 파일의 '쓸 작가' 목록. 첫 작가가 기본
+main_artists: [artist name one, artist name two]    # 글콘티용 첨부 파일의 '쓸 작가' 목록. 첫 작가가 기본
 presets:
   mystyle: {artist: "artist name one", artist_weight: 1.0}   # nk gen --preset mystyle
 ```

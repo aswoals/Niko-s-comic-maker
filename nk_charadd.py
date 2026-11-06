@@ -309,7 +309,7 @@ def run_add(nk, kit, args):
     print("\n확인 그림: %s\n초안: %s" % (sp, draft))
     if args.save:
         open(cp, "w", encoding="utf-8").write(text)
-        print("저장: %s  (AI 첨부 파일 다시 만들기: nk ep aifile)" % cp)
+        print("저장: %s  (글콘티용 첨부 파일 다시 만들기: nk ep aifile)" % cp)
     else:
         print("저장하려면: nk ep charadd %s --save (같은 시드라 같은 결과) 또는 초안을 characters\\ 로 복사" % tag)
     return {"tag": tag, "file": cp, "draft": draft, "sheet": sp, "text": text, "recognized": rec_n, "n": n}

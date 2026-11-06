@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """nk_easy.py — '누구나 간단한 요청으로 만화' 쪽 명령 세 개
 
-  nk ep aifile               -> AI_첨부용.md  (AI 채팅에 첨부하고 자유롭게 요청하면 계획표(plan.yaml)를 써 주는 안내서)
+  nk ep aifile               -> AI_글콘티_만들기.md  (AI 채팅에 첨부하고 자유롭게 요청하면 계획표(plan.yaml)를 써 주는 안내서)
   nk ep paste <ep> [--go]      -> 복사해 둔 AI 답을 episodes/<ep>/plan.yaml 로 저장 + 검사. 고칠 점은 클립보드로 (AI 채팅에 다시 붙여 넣기)
                                   --go : 고칠 점이 없으면 바로 만화 만들기(nk ep auto)
   nk ep fix <ep> <컷> [--add "태그"] [--remove "태그"] [--who 이름] [--nodraw]
@@ -10,10 +10,10 @@
 왜 따로 파일: 기존 명령(write/compile/redo/auto)을 사람이 순서대로 이어야 했던 것을 한 번에 묶는 '겉' 층. 안쪽 규칙은 그대로 씀."""
 import os, sys, re, time, glob, shutil, subprocess, json
 
-AI_FILE = "AI_첨부용.md"
+AI_FILE = "AI_글콘티_만들기.md"
 
 
-# ================================================================ 1. AI 첨부 파일
+# ================================================================ 1. 글콘티용 첨부 파일
 def _char_rows(kit):
     import yaml
     import nk_plan
@@ -142,7 +142,7 @@ def run_aifile(nk, kit, args):
     text = build_aifile(nk, kit)
     out = os.path.join(kit, AI_FILE)
     open(out, "w", encoding="utf-8").write(text)
-    print("AI attachment ->", out, "(%d chars)" % len(text))
+    print("storyboard attachment ->", out, "(%d chars)" % len(text))
     print("  1. AI 채팅 새 대화에 이 파일을 첨부")
     print("  2. 그냥 쓰기: 예) 여우와 토끼가 눈싸움하는 만화, 2쪽, 태그는 snow 꼭, 눈사람 만드는 장면 꼭 (줄거리부터 보려면 '줄거리 먼저')")
     print("     ChatGPT·Gemini 같은 아무 AI 채팅이나 됨 (무료판도 됨)")
@@ -523,7 +523,7 @@ def run_menu(nk, kit, args):
         print("\n================ 만화 만들기 메뉴 ================  (%s)" % kit)
         print("ComfyUI: %s" % (("켜져 있음 (포트 %d)" % port + (" - 지금 다른 작업 %d개 진행 중" % busy if busy else ""))
                                 if port else "꺼져 있음 -> 그리기 전에 ComfyUI Desktop을 켜 두기"))
-        print(" 1. AI 첨부 파일 만들기 (캐릭터를 추가했으면 다시)")
+        print(" 1. 글콘티용 첨부 파일 만들기 (캐릭터를 추가했으면 다시)")
         print(" 2. AI 답 붙여넣기 (AI 답을 전부 복사한 뒤)")
         print(" 3. 만화 만들기 / 멈춘 곳부터 이어서")
         print(" 4. 컷 하나 고치기 (태그 넣기·빼기 -> 그 컷만 다시 / 태그 없이 엔터 = 새 시드로 다시 그리기)")
@@ -552,7 +552,7 @@ def run_menu(nk, kit, args):
                 if not k.isdigit() or not 1 <= int(k) <= len(res):
                     continue
                 tag = res[int(k) - 1][0]
-                ko = _ask("이 캐릭터를 부를 한국어 이름 (AI 첨부 파일에 나옴)", name)
+                ko = _ask("이 캐릭터를 부를 한국어 이름 (글콘티용 첨부 파일에 나옴)", name)
                 if not _ok_to_draw(nk):
                     continue
                 r = CA.run_add(nk, kit, ns(tag=tag, ko=ko, n=8, seed=501, artist=None, save=False, overwrite=False,
@@ -565,7 +565,7 @@ def run_menu(nk, kit, args):
                         open(r["file"], "w", encoding="utf-8").write(r["text"])
                         print("저장:", r["file"])
                         run_aifile(nk, kit, ns())
-                        print("-> AI 첨부 파일도 새로 만듦 (AI 채팅 새 대화에 다시 첨부)")
+                        print("-> 글콘티용 첨부 파일도 새로 만듦 (AI 채팅 새 대화에 다시 첨부)")
             elif c in ("2", "3", "4", "5", "6"):
                 print("있는 화: %s" % (", ".join(_eps(kit)) or "(없음)"))
                 ep = _ask("화 이름 (영어·숫자, 예: ep01)", last)
@@ -628,7 +628,7 @@ LAB_README = """# 실험 폴더 안내 (nk ep newlab 이 만듦, %(ts)s)
 ## 쓰는 법
 1. ComfyUI Desktop 켜기 (캔버스가 뜰 때까지)
 2. 이 폴더의 `만화만들기.bat` 더블클릭
-   - 1: AI 첨부 파일 만들기 -> 이 폴더에 `AI_첨부용.md`
+   - 1: 글콘티용 첨부 파일 만들기 -> 이 폴더에 `AI_글콘티_만들기.md`
    - 2: AI 답 붙여넣기 (AI 답 전체 복사 후) -> 화 이름 (예: n01)
    - 3: 만화 만들기 (Anima 흐름 2쪽 약 15분)   4: 컷 하나 고치기   5: 대사만   6: 결과 보기
 3. 결과: `episodes\\<화>\\out\\page_01.png ...`, 검토 `episodes\\<화>\\auto\\review.png`
@@ -769,18 +769,18 @@ def run_newlab(nk, kit, args):
         print("   ... (%d more)" % (len(log) - 40))
     if bk:
         print("\n옛 캐릭터 파일(바뀐 것만) 백업: %s" % bk)
-    if args.update and getattr(args, "chars", False):     # 캐릭터가 키트와 같아졌으니 AI 첨부 파일도 그 폴더 것으로 새로
+    if args.update and getattr(args, "chars", False):     # 캐릭터가 키트와 같아졌으니 글콘티용 첨부 파일도 그 폴더 것으로 새로
         gf = os.path.join(dest, AI_FILE)
         open(gf, "w", encoding="utf-8").write(build_aifile(nk, dest))
-        print("AI 첨부 파일도 새로: %s  (AI 채팅 새 대화에 다시 첨부)" % gf)
-    print("\n다음: %s\\만화만들기.bat 더블클릭 -> 1 (AI 첨부 파일 만들기)" % dest)
+        print("글콘티용 첨부 파일도 새로: %s  (AI 채팅 새 대화에 다시 첨부)" % gf)
+    print("\n다음: %s\\만화만들기.bat 더블클릭 -> 1 (글콘티용 첨부 파일 만들기)" % dest)
     if not args.update:
         print("안내: %s\\실험폴더_안내.md" % dest)
 
 
 # ================================================================ 명령 등록 (nk_webtoon.add_parser 에서 부름)
 def add_parsers(esub, nk, kit):
-    a = esub.add_parser("aifile", help="make AI_첨부용.md: attach it in any AI chat and ask in plain Korean -> the AI writes plan.yaml")
+    a = esub.add_parser("aifile", help="make AI_글콘티_만들기.md (storyboard request file): attach it in any AI chat and ask in plain Korean -> the AI writes plan.yaml")
     a.set_defaults(func=lambda x: run_aifile(nk, kit, x))
     a = esub.add_parser("paste", help="save the copied AI answer as episodes/<ep>/plan.yaml, check it (fix notes -> clipboard)")
     a.add_argument("ep"); a.add_argument("--file", help="read the answer from a file instead of the clipboard")
@@ -806,6 +806,6 @@ def add_parsers(esub, nk, kit):
     a = esub.add_parser("newlab", help="copy what the comic steps need into a separate test folder (your own lab); --update = new code only")
     a.add_argument("dest", nargs="?", help="folder path, e.g. C:\\comic_lab (asked if missing)")
     a.add_argument("--update", action="store_true", help="only code (nk*.py, bat) and rule docs; keep the lab's presets, characters, episodes")
-    a.add_argument("--chars", action="store_true", help="with --update: also replace character files with the kit's (changed old ones backed up in <lab>/_backup/<time>) and rebuild its AI file")
+    a.add_argument("--chars", action="store_true", help="with --update: also replace character files with the kit's (changed old ones backed up in <lab>/_backup/<time>) and rebuild its storyboard file")
     a.add_argument("--workshop", action="store_true", help="no path: use the personal folder added in the workshop (asks if several) - 망가메이커_업데이트.bat")
     a.set_defaults(func=lambda x: run_newlab(nk, kit, x))

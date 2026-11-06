@@ -382,7 +382,7 @@ class App:
         kind = a[1] if len(a) > 1 else ""
         ep = a[2] if len(a) > 2 and EP_RE.match(a[2]) else ""
         KO = {"paste": "새 만화", "auto": "만들기", "fix": "컷 다시 그리기", "cands": "후보 3장", "usecand": "후보로 바꾸기",
-              "letter": "말풍선 다시", "aifile": "AI 첨부 파일", "animatest": "시험", "trainanima": "학습",
+              "letter": "말풍선 다시", "aifile": "글콘티용 첨부 파일", "animatest": "시험", "trainanima": "학습",
               "regionlora": "두 명 컷 영역 LoRA", "animamake": "Anima 그리기", "animafix": "LoRA 캐릭터 다시 그리기"}
         name = ((ep + " ") if ep else "") + KO.get(kind, kind or "작업")
         try:
@@ -902,7 +902,7 @@ class App:
                 raise ValueError("그 폴더의 workflows 에 없는 워크플로: %s" % name)
             return ["ep", "flow", "set", name, "--ep", ep], "%s 그림 워크플로 -> %s" % (ep, name if name != "none" else "기본"), rid
         if kind == "aifile":
-            return ["ep", "aifile"], "AI 첨부 파일 만들기", "0"
+            return ["ep", "aifile"], "글콘티용 첨부 파일 만들기", "0"
         if kind == "paste":
             text = str(b.get("text") or "")
             if not text.strip() or len(text) > 200000:
@@ -2039,9 +2039,10 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
       <div id="rootnote" class="mute" style="font-size:12px;margin-bottom:6px"></div>
       <div id="eps" class="eplist"></div></section>
     <section><h2>새 만화 (AI 답 붙여 넣기)</h2>
-      <div class="row" style="margin-bottom:6px"><button id="b-aifile">AI 첨부 파일 만들기</button></div>
-      <div class="mute" style="font-size:12.5px;margin-bottom:6px">AI_첨부용.md 를 AI 채팅에 첨부하고 만들고 싶은 만화를 말하면, AI가 계획표(YAML)를 줌. 그 답 전체를 아래에 붙여 넣기.
-        ChatGPT·Gemini 같은 아무 AI 채팅이나 됨 (무료판도 됨).</div>
+      <div class="row" style="margin-bottom:6px"><button id="b-aifile">글콘티용 첨부 파일 만들기</button></div>
+      <div class="mute" style="font-size:12.5px;margin-bottom:6px">AI_글콘티_만들기.md 를 AI 채팅에 첨부하고 만들고 싶은 만화를 말하면, AI가 계획표(YAML)를 줌. 그 답 전체를 아래에 붙여 넣기.
+        ChatGPT·Gemini 같은 아무 AI 채팅이나 됨 (무료판도 됨).<br>
+        캐릭터가 아직 없으면 키트 폴더의 AI_캐릭터_만들기.md 를 AI 채팅에 첨부해서 먼저 만들기.</div>
       <details id="req" style="margin-bottom:8px"><summary style="cursor:pointer;font-size:13px"><b>AI 채팅에 보낼 요청 글 만들기</b> (칸을 채우면 복사)</summary>
         <div style="display:grid;gap:4px;margin-top:6px;font-size:12.5px">
           <input id="rq-cast" placeholder="등장 캐릭터 (예: 여우, 토끼)">
@@ -2054,7 +2055,7 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
           <input id="rq-end" placeholder="끝 반전·마무리 (없으면 비움, 예: 구하러 간 여우가 오히려 구조받음)">
           <label><input type="checkbox" id="rq-first"> 줄거리 먼저 보기 (AI가 줄거리만 먼저 → '좋아'라고 하면 계획표)</label>
           <div class="row"><button id="b-req">요청 글 만들기 + 복사</button></div>
-          <textarea id="rq-out" placeholder="여기 만든 글이 나옴 → AI 채팅 새 대화에 AI_첨부용.md 첨부 + 이 글 붙여 넣기" style="min-height:90px"></textarea>
+          <textarea id="rq-out" placeholder="여기 만든 글이 나옴 → AI 채팅 새 대화에 AI_글콘티_만들기.md 첨부 + 이 글 붙여 넣기" style="min-height:90px"></textarea>
         </div></details>
       <div class="row" style="margin-bottom:6px"><input id="new-ep" placeholder="에피소드 이름" style="width:170px"></div>
       <div class="row" style="margin-bottom:6px"><span class="mute" style="font-size:12.5px">저장할 곳</span><select id="new-root" style="max-width:100%"></select></div>
@@ -2300,7 +2301,7 @@ async function loadEp(ep,keep){
 }
 $("#b-kill").onclick=async()=>{if(!confirm("지금 도는 작업을 멈출까요?\n그리던 그림 1장은 버려지고, 만화 작업이면 '멈춘 작업'으로 남아서 '이어서 시작'으로 이어 갈 수 있어."))return;try{const j=await post("/api/kill");toast("멈춤: "+j.job+" — 작업 줄 맨 끝 '⏸ 멈춤'에서 이어서 시작",7000);refresh()}catch(e){toast(e.message)}};
 $("#b-runner").onclick=async()=>{try{const j=await post("/api/runner");toast(j.msg)}catch(e){toast(e.message)}};
-$("#b-aifile").onclick=()=>job({kind:"aifile",root:"0"},"AI 첨부 파일 만들기 (키트 폴더의 AI_첨부용.md)");
+$("#b-aifile").onclick=()=>job({kind:"aifile",root:"0"},"글콘티용 첨부 파일 만들기 (키트 폴더의 AI_글콘티_만들기.md)");
 function paste(go){const ep=$("#new-ep").value.trim(), t=$("#new-text").value;if(!ep||!t.trim()){toast("이름과 AI 답을 넣어 주세요");return}job({kind:"paste",ep:ep,text:t,go:go,root:$("#new-root").value,flow:$("#new-flow").value})}
 async function loadFlows(){try{const f=await get("/api/flows?root="+encodeURIComponent($("#new-root").value||"0"));$("#new-flow").innerHTML="<option value=''>기본 (nk 그리기)</option>"+(f.flows||[]).map(x=>"<option>"+esc(x)+"</option>").join("")}catch(e){}}
 $("#new-root").onchange=loadFlows;
@@ -2334,7 +2335,7 @@ $("#b-req").onclick=async()=>{const v=id=>$("#"+id).value.trim();
   if(v("rq-end"))L.push("- 끝 반전·마무리: "+v("rq-end"));
   if($("#rq-first").checked)L.push("","줄거리 먼저: 이번에는 줄거리만 보여 줘. 내가 좋다고 하면 그때 계획표(YAML)를 써 줘.");
   const t=L.join("\n");$("#rq-out").value=t;
-  try{await navigator.clipboard.writeText(t);toast("복사함 — AI 채팅 새 대화에 AI_첨부용.md 첨부 + 붙여 넣기",6000)}catch(e){toast("아래 글을 직접 복사해 줘",5000)}};
+  try{await navigator.clipboard.writeText(t);toast("복사함 — AI 채팅 새 대화에 AI_글콘티_만들기.md 첨부 + 붙여 넣기",6000)}catch(e){toast("아래 글을 직접 복사해 줘",5000)}};
 loadRoots().then(()=>{loadEps();loadFlows()});refresh();setInterval(refresh,5000);setInterval(loadEps,60000);
 </script></body></html>
 """
