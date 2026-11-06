@@ -615,7 +615,7 @@ def argparse_ns(**kw):
 
 
 # ================================================================ 계획 쓰기 (이야기 -> plan.yaml)
-# 백엔드: prompt = 프롬프트 파일만 만듦 (Grok 등 웹 AI에 붙여 넣고, 답을 episodes/<ep>/plan.yaml로 저장)
+# 백엔드: prompt = 프롬프트 파일만 만듦 (웹 AI 채팅에 붙여 넣고, 답을 episodes/<ep>/plan.yaml로 저장)
 #         ollama = 이 PC의 로컬 모델이 씀 (무료. 모델은 --model, 기본은 presets qa.model)
 ALIAS = {}   # 캐릭터 파일 이름 -> 짧은 이름 (비면 파일 이름 그대로)
 

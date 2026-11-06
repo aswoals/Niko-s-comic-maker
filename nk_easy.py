@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """nk_easy.py — '누구나 간단한 요청으로 만화' 쪽 명령 세 개
 
-  nk ep grokfile               -> Grok_첨부용.md  (Grok에 첨부하고 자유롭게 요청하면 계획표(plan.yaml)를 써 주는 안내서)
-  nk ep paste <ep> [--go]      -> 복사해 둔 Grok 답을 episodes/<ep>/plan.yaml 로 저장 + 검사. 고칠 점은 클립보드로 (Grok에 다시 붙여 넣기)
+  nk ep aifile               -> AI_첨부용.md  (AI 채팅에 첨부하고 자유롭게 요청하면 계획표(plan.yaml)를 써 주는 안내서)
+  nk ep paste <ep> [--go]      -> 복사해 둔 AI 답을 episodes/<ep>/plan.yaml 로 저장 + 검사. 고칠 점은 클립보드로 (AI 채팅에 다시 붙여 넣기)
                                   --go : 고칠 점이 없으면 바로 만화 만들기(nk ep auto)
   nk ep fix <ep> <컷> [--add "태그"] [--remove "태그"] [--who 이름] [--nodraw]
                                -> 계획표의 그 컷 태그를 넣고/빼고 -> 콘티 다시 -> 그 컷만 새로 그림 -> 얼굴·그림체·글자까지 다시
@@ -10,10 +10,10 @@
 왜 따로 파일: 기존 명령(write/compile/redo/auto)을 사람이 순서대로 이어야 했던 것을 한 번에 묶는 '겉' 층. 안쪽 규칙은 그대로 씀."""
 import os, sys, re, time, glob, shutil, subprocess, json
 
-GROK_FILE = "Grok_첨부용.md"
+AI_FILE = "AI_첨부용.md"
 
 
-# ================================================================ 1. Grok 첨부 파일
+# ================================================================ 1. AI 첨부 파일
 def _char_rows(kit):
     import yaml
     import nk_plan
@@ -24,15 +24,15 @@ def _char_rows(kit):
             d = yaml.safe_load(open(f, encoding="utf-8")) or {}
         except Exception:
             continue
-        if d.get("grok_hide") or fn.startswith("_"):
+        if d.get("ai_hide") or fn.startswith("_"):
             continue
         short = nk_plan.ALIAS.get(fn, fn)
         rows.append((short, fn, str(d.get("name_ko") or fn), " ".join(str(d.get("anima") or "").split()),
-                     bool(d.get("lora")), str(d.get("personality") or "").strip(), str(d.get("grok_note") or ANIMA_KNOWS.get(fn, "")).strip()))
+                     bool(d.get("lora")), str(d.get("personality") or "").strip(), str(d.get("ai_note") or ANIMA_KNOWS.get(fn, "")).strip()))
     return rows
 
 
-ANIMA_KNOWS = {}   # 캐릭터 파일 이름 -> 메모 (캐릭터 파일의 grok_note 가 있으면 그것을 씀)
+ANIMA_KNOWS = {}   # 캐릭터 파일 이름 -> 메모 (캐릭터 파일의 ai_note 가 있으면 그것을 씀)
 ARTIST_NOTE = ("- 쓸 작가: [작가 목록]의 main_artists (presets.yaml 에서 정함). 사용자가 다른 작가를 말하면 Danbooru/e621 작가 태그 이름 그대로\n"
                "- 목록이 비어 있고 요청에도 작가가 없으면 artist 줄을 쓰지 않는다")
 
@@ -109,7 +109,7 @@ SELF_CHECK = """# 내기 전 스스로 확인 (하나라도 어기면 고쳐서 
 """
 
 
-def build_grokfile(nk, kit):
+def build_aifile(nk, kit):
     tpl = open(os.path.join(kit, "docs", "prompt_plan.md"), encoding="utf-8").read()
     rows = _char_rows(kit)
     main, arts = _artists(nk)
@@ -125,7 +125,7 @@ def build_grokfile(nk, kit):
     tpl = tpl.replace("# 요청\n(프로그램이 채움)", READ_RULES)
     tpl = tpl.replace("아래 [요청]을 읽고", "사용자의 요청(이 파일을 첨부하며 보낸 메시지)을 읽고")
     tail = ""
-    exf = os.path.join(kit, "docs", "grok_example.yaml")
+    exf = os.path.join(kit, "docs", "plan_example.yaml")
     if os.path.exists(exf):
         ex = "".join(l for l in open(exf, encoding="utf-8") if not l.startswith("#"))
         tail += ("\n# 잘 된 예시 (형식·리듬만 참고 — 이야기·대사·캐릭터는 베끼지 않는다)\n"
@@ -133,20 +133,20 @@ def build_grokfile(nk, kit):
                  "```yaml\n" + ex.strip() + "\n```\n")
     tail += "\n" + SELF_CHECK
     tpl = tpl.replace("위 형식의 YAML만 출력하라.", tail + "\n위 형식의 YAML만 출력하라 ('줄거리 먼저'라고 했으면 그 답만 줄거리).")
-    head = ("<!-- nk ep grokfile 이 만든 파일 (%s). 캐릭터를 추가하면 nk ep grokfile 로 다시 만들 것 -->\n"
+    head = ("<!-- nk ep aifile 이 만든 파일 (%s). 캐릭터를 추가하면 nk ep aifile 로 다시 만들 것 -->\n"
             % time.strftime("%Y-%m-%d %H:%M"))
     return head + tpl
 
 
-def run_grokfile(nk, kit, args):
-    text = build_grokfile(nk, kit)
-    out = os.path.join(kit, GROK_FILE)
+def run_aifile(nk, kit, args):
+    text = build_aifile(nk, kit)
+    out = os.path.join(kit, AI_FILE)
     open(out, "w", encoding="utf-8").write(text)
-    print("Grok attachment ->", out, "(%d chars)" % len(text))
-    print("  1. Grok 새 대화에 이 파일을 첨부")
+    print("AI attachment ->", out, "(%d chars)" % len(text))
+    print("  1. AI 채팅 새 대화에 이 파일을 첨부")
     print("  2. 그냥 쓰기: 예) 여우와 토끼가 눈싸움하는 만화, 2쪽, 태그는 snow 꼭, 눈사람 만드는 장면 꼭 (줄거리부터 보려면 '줄거리 먼저')")
-    print("     Grok 한도가 차면: 같은 파일을 Gemini·ChatGPT 무료에 첨부해도 됨")
-    print("  3. Grok 답을 전부 복사 -> nk ep paste <화이름>")
+    print("     ChatGPT·Gemini 같은 아무 AI 채팅이나 됨 (무료판도 됨)")
+    print("  3. AI 답을 전부 복사 -> nk ep paste <화이름>")
 
 
 # ================================================================ 2. 붙여넣기
@@ -182,17 +182,17 @@ def run_paste(nk, kit, args):
     else:
         raw = _clip_get()
         if raw is None:
-            print("[ERROR] 클립보드에서 글을 못 읽었음. Grok 답을 파일로 저장해서: nk ep paste %s --file 답.txt" % args.ep); sys.exit(1)
+            print("[ERROR] 클립보드에서 글을 못 읽었음. AI 답을 파일로 저장해서: nk ep paste %s --file 답.txt" % args.ep); sys.exit(1)
     m = re.search(r"캐릭터 파일 없음\s*:\s*(.+)", raw)
     if m and "pages" not in raw:
-        print("[STOP] Grok 답: 캐릭터 파일 없음: %s" % m.group(1).strip())
+        print("[STOP] AI 답: 캐릭터 파일 없음: %s" % m.group(1).strip())
         print("  그 캐릭터는 characters\\ 에 파일이 있어야 그릴 수 있음 (새 캐릭터 만들기는 문서 참고)"); sys.exit(1)
     try:
         plan, body = nk_plan._extract_yaml(raw)
     except Exception as e:
-        print("[ERROR] 복사한 글에서 YAML을 못 찾음 (Grok 답 전체를 복사했는지 확인. '줄거리 먼저' 답이면 Grok 에 '좋아'라고 하고 그다음 YAML 답을 붙여 넣기): %s" % e); sys.exit(1)
+        print("[ERROR] 복사한 글에서 YAML을 못 찾음 (AI 답 전체를 복사했는지 확인. '줄거리 먼저' 답이면 AI 채팅에 '좋아'라고 하고 그다음 YAML 답을 붙여 넣기): %s" % e); sys.exit(1)
     if not isinstance(plan, dict) or not plan.get("pages"):
-        print("[ERROR] 복사한 글에 'pages:' 가 없음 - Grok 답 전체를 복사했는지 확인 (처음 60자: %r)" % raw.strip()[:60]); sys.exit(1)
+        print("[ERROR] 복사한 글에 'pages:' 가 없음 - AI 답 전체를 복사했는지 확인 (처음 60자: %r)" % raw.strip()[:60]); sys.exit(1)
     d = W.ep_dir(kit, args.ep)
     drawn = glob.glob(os.path.join(d, "cuts", "cut*.png"))
     if drawn:
@@ -200,12 +200,12 @@ def run_paste(nk, kit, args):
               % (args.ep, len(drawn), args.ep)); sys.exit(1)
     os.makedirs(d, exist_ok=True)
     ts = time.strftime("%m%d_%H%M%S")
-    open(os.path.join(d, "grok_answer_%s.md" % ts), "w", encoding="utf-8").write(raw)
+    open(os.path.join(d, "ai_answer_%s.md" % ts), "w", encoding="utf-8").write(raw)
     pp = os.path.join(d, "plan.yaml")
     if os.path.exists(pp):
         shutil.copy(pp, os.path.join(d, "plan_%s.bak.yaml" % ts))
         print("old plan kept: plan_%s.bak.yaml" % ts)
-    open(pp, "w", encoding="utf-8").write("# Grok 답 (nk ep paste %s)\n" % time.strftime("%Y-%m-%d %H:%M") + body)
+    open(pp, "w", encoding="utf-8").write("# AI 답 (nk ep paste %s)\n" % time.strftime("%Y-%m-%d %H:%M") + body)
     if getattr(args, "flow", None):
         import nk_flow
         nk_flow.set_top_key(pp, "flow", args.flow)
@@ -221,7 +221,7 @@ def run_paste(nk, kit, args):
     if os.path.exists(fp):
         txt = open(fp, encoding="utf-8").read()
         ok = _clip_set(txt)
-        print("\n[Grok에 돌려줄 고칠 점] %s" % ("클립보드에 복사됨 -> Grok 같은 대화에 붙여 넣고, 새 답을 복사해서 다시 nk ep paste %s"
+        print("\n[AI에게 돌려줄 고칠 점] %s" % ("클립보드에 복사됨 -> AI 채팅의 같은 대화에 붙여 넣고, 새 답을 복사해서 다시 nk ep paste %s"
                                           % args.ep if ok else "파일: %s" % fp))
         if not getattr(args, "go", False):
             print("  (고치지 않고 그대로 만들어도 됨: nk ep auto %s)" % args.ep)
@@ -523,8 +523,8 @@ def run_menu(nk, kit, args):
         print("\n================ 만화 만들기 메뉴 ================  (%s)" % kit)
         print("ComfyUI: %s" % (("켜져 있음 (포트 %d)" % port + (" - 지금 다른 작업 %d개 진행 중" % busy if busy else ""))
                                 if port else "꺼져 있음 -> 그리기 전에 ComfyUI Desktop을 켜 두기"))
-        print(" 1. Grok 첨부 파일 만들기 (캐릭터를 추가했으면 다시)")
-        print(" 2. Grok 답 붙여넣기 (Grok 답을 전부 복사한 뒤)")
+        print(" 1. AI 첨부 파일 만들기 (캐릭터를 추가했으면 다시)")
+        print(" 2. AI 답 붙여넣기 (AI 답을 전부 복사한 뒤)")
         print(" 3. 만화 만들기 / 멈춘 곳부터 이어서")
         print(" 4. 컷 하나 고치기 (태그 넣기·빼기 -> 그 컷만 다시 / 태그 없이 엔터 = 새 시드로 다시 그리기)")
         print(" 5. 대사만 고친 뒤 글자 다시 넣기 (plan.yaml의 lines를 고친 뒤)")
@@ -536,8 +536,8 @@ def run_menu(nk, kit, args):
             if c == "0" or c.lower() in ("q", "exit"):
                 return
             if c == "1":
-                run_grokfile(nk, kit, ns())
-                _open(os.path.join(kit, GROK_FILE))
+                run_aifile(nk, kit, ns())
+                _open(os.path.join(kit, AI_FILE))
             elif c == "7":
                 import nk_charadd as CA
                 name = _ask("캐릭터 이름 (한국어나 영어, 작품 이름을 같이 쓰면 더 잘 찾음)")
@@ -552,7 +552,7 @@ def run_menu(nk, kit, args):
                 if not k.isdigit() or not 1 <= int(k) <= len(res):
                     continue
                 tag = res[int(k) - 1][0]
-                ko = _ask("이 캐릭터를 부를 한국어 이름 (Grok 첨부 파일에 나옴)", name)
+                ko = _ask("이 캐릭터를 부를 한국어 이름 (AI 첨부 파일에 나옴)", name)
                 if not _ok_to_draw(nk):
                     continue
                 r = CA.run_add(nk, kit, ns(tag=tag, ko=ko, n=8, seed=501, artist=None, save=False, overwrite=False,
@@ -564,8 +564,8 @@ def run_menu(nk, kit, args):
                     if _ask("저장할까요? (y/n)", "n").lower().startswith("y"):
                         open(r["file"], "w", encoding="utf-8").write(r["text"])
                         print("저장:", r["file"])
-                        run_grokfile(nk, kit, ns())
-                        print("-> Grok 첨부 파일도 새로 만듦 (Grok 새 대화에 다시 첨부)")
+                        run_aifile(nk, kit, ns())
+                        print("-> AI 첨부 파일도 새로 만듦 (AI 채팅 새 대화에 다시 첨부)")
             elif c in ("2", "3", "4", "5", "6"):
                 print("있는 화: %s" % (", ".join(_eps(kit)) or "(없음)"))
                 ep = _ask("화 이름 (영어·숫자, 예: ep01)", last)
@@ -617,7 +617,7 @@ def run_menu(nk, kit, args):
 
 # 키트는 그대로 두고, 필요한 것만 다른 폴더로 복사. 모델(ComfyUI·Ollama)은 PC에 하나라 같이 씀.
 LAB_CODE = ["nk.bat", "만화만들기.bat", "작업실.bat"]                         # + nk*.py 전부
-LAB_DOCS = ["prompt_plan.md", "conti_rules.md", "grok_example.yaml"]
+LAB_DOCS = ["prompt_plan.md", "conti_rules.md", "plan_example.yaml"]
 LAB_DIRS = ["characters", "character", "tags", os.path.join("models", "wd-eva02-large-tagger-v3")]
 LAB_FILES_ONCE = ["presets.yaml", "nk_guide.md"]
 LAB_README = """# 실험 폴더 안내 (nk ep newlab 이 만듦, %(ts)s)
@@ -628,8 +628,8 @@ LAB_README = """# 실험 폴더 안내 (nk ep newlab 이 만듦, %(ts)s)
 ## 쓰는 법
 1. ComfyUI Desktop 켜기 (캔버스가 뜰 때까지)
 2. 이 폴더의 `만화만들기.bat` 더블클릭
-   - 1: Grok 첨부 파일 만들기 -> 이 폴더에 `Grok_첨부용.md`
-   - 2: Grok 답 붙여넣기 (Grok 답 전체 복사 후) -> 화 이름 (예: n01)
+   - 1: AI 첨부 파일 만들기 -> 이 폴더에 `AI_첨부용.md`
+   - 2: AI 답 붙여넣기 (AI 답 전체 복사 후) -> 화 이름 (예: n01)
    - 3: 만화 만들기 (Anima 흐름 2쪽 약 15분)   4: 컷 하나 고치기   5: 대사만   6: 결과 보기
 3. 결과: `episodes\\<화>\\out\\page_01.png ...`, 검토 `episodes\\<화>\\auto\\review.png`
 
@@ -640,7 +640,7 @@ LAB_README = """# 실험 폴더 안내 (nk ep newlab 이 만듦, %(ts)s)
 - 캐릭터·작가 설정을 여기서 바꿔도 키트에는 영향 없음.
 
 ## 기록 남기기 (좋았던 것·안 좋았던 것·고친 것)
-- 이야기: `episodes\\<화>\\plan.yaml`, `grok_answer_*.md` (Grok 답 원문)
+- 이야기: `episodes\\<화>\\plan.yaml`, `ai_answer_*.md` (AI 답 원문)
 - 결과: `episodes\\<화>\\out_*\\page_*.png`, `episodes\\<화>\\auto\\review.md`
 - 에러: 검은 창의 마지막 30줄 복사
 - 여기서 고친 캐릭터·설정 파일: `characters\\<이름>.yaml`, `presets.yaml`
@@ -769,20 +769,20 @@ def run_newlab(nk, kit, args):
         print("   ... (%d more)" % (len(log) - 40))
     if bk:
         print("\n옛 캐릭터 파일(바뀐 것만) 백업: %s" % bk)
-    if args.update and getattr(args, "chars", False):     # 캐릭터가 키트와 같아졌으니 Grok 첨부 파일도 그 폴더 것으로 새로
-        gf = os.path.join(dest, GROK_FILE)
-        open(gf, "w", encoding="utf-8").write(build_grokfile(nk, dest))
-        print("Grok 첨부 파일도 새로: %s  (Grok 새 대화에 다시 첨부)" % gf)
-    print("\n다음: %s\\만화만들기.bat 더블클릭 -> 1 (Grok 첨부 파일 만들기)" % dest)
+    if args.update and getattr(args, "chars", False):     # 캐릭터가 키트와 같아졌으니 AI 첨부 파일도 그 폴더 것으로 새로
+        gf = os.path.join(dest, AI_FILE)
+        open(gf, "w", encoding="utf-8").write(build_aifile(nk, dest))
+        print("AI 첨부 파일도 새로: %s  (AI 채팅 새 대화에 다시 첨부)" % gf)
+    print("\n다음: %s\\만화만들기.bat 더블클릭 -> 1 (AI 첨부 파일 만들기)" % dest)
     if not args.update:
         print("안내: %s\\실험폴더_안내.md" % dest)
 
 
 # ================================================================ 명령 등록 (nk_webtoon.add_parser 에서 부름)
 def add_parsers(esub, nk, kit):
-    a = esub.add_parser("grokfile", help="make Grok_첨부용.md: attach it in Grok and ask in plain Korean -> Grok writes plan.yaml")
-    a.set_defaults(func=lambda x: run_grokfile(nk, kit, x))
-    a = esub.add_parser("paste", help="save the copied Grok answer as episodes/<ep>/plan.yaml, check it (fix notes -> clipboard)")
+    a = esub.add_parser("aifile", help="make AI_첨부용.md: attach it in any AI chat and ask in plain Korean -> the AI writes plan.yaml")
+    a.set_defaults(func=lambda x: run_aifile(nk, kit, x))
+    a = esub.add_parser("paste", help="save the copied AI answer as episodes/<ep>/plan.yaml, check it (fix notes -> clipboard)")
     a.add_argument("ep"); a.add_argument("--file", help="read the answer from a file instead of the clipboard")
     a.add_argument("--go", action="store_true", help="make the comic right away (nk ep auto); fix points from the check are shown but do not stop it")
     a.add_argument("--flow", help="your ComfyUI workflow slot for solo cuts (workflows/<name>.json), written into plan.yaml")
@@ -806,6 +806,6 @@ def add_parsers(esub, nk, kit):
     a = esub.add_parser("newlab", help="copy what the comic steps need into a separate test folder (your own lab); --update = new code only")
     a.add_argument("dest", nargs="?", help="folder path, e.g. C:\\comic_lab (asked if missing)")
     a.add_argument("--update", action="store_true", help="only code (nk*.py, bat) and rule docs; keep the lab's presets, characters, episodes")
-    a.add_argument("--chars", action="store_true", help="with --update: also replace character files with the kit's (changed old ones backed up in <lab>/_backup/<time>) and rebuild its Grok file")
+    a.add_argument("--chars", action="store_true", help="with --update: also replace character files with the kit's (changed old ones backed up in <lab>/_backup/<time>) and rebuild its AI file")
     a.add_argument("--workshop", action="store_true", help="no path: use the personal folder added in the workshop (asks if several) - 망가메이커_업데이트.bat")
     a.set_defaults(func=lambda x: run_newlab(nk, kit, x))

@@ -100,7 +100,7 @@ def test_rule5_can_be_turned_back_on(plan):
 
 
 def test_anima_interaction_sentences():
-    """닿는 동작 태그 -> 자리 잡기(Anima) 동작 문장 (Grok 규칙 5 에 적은 동작 모두)"""
+    """닿는 동작 태그 -> 자리 잡기(Anima) 동작 문장 (계획표 규칙 5 에 적은 동작 모두)"""
     import nk_webtoon as W
     rs = [{"key": "hero", "char": {"compose_name": "grey cat"}, "rp": "smile"},
           {"key": "buddy", "char": {"compose_name": "white goat"}, "rp": "smile"}]
@@ -320,13 +320,13 @@ def test_paste_refuses_episode_with_drawn_cuts(tmp_path, monkeypatch):
     assert compiled == ["e1", "e1"] and (tmp_path / "episodes" / "e1" / "plan.yaml").read_text(encoding="utf-8") == plan_before
 
 
-def test_grok_char_rows_skip_hidden(tmp_path, monkeypatch):
-    """grok_hide 캐릭터는 Grok 첨부 파일 목록에서 뺌"""
+def test_ai_char_rows_skip_hidden(tmp_path, monkeypatch):
+    """ai_hide 캐릭터는 AI 첨부 파일 목록에서 뺌"""
     import nk_easy
     monkeypatch.setenv("NK_CHARS", str(tmp_path / "characters"))
     (tmp_path / "characters").mkdir()
     (tmp_path / "characters" / "a.yaml").write_text("name_ko: A\nanima: a\n", encoding="utf-8")
-    (tmp_path / "characters" / "b.yaml").write_text("name_ko: B\nanima: b\ngrok_hide: true\n", encoding="utf-8")
+    (tmp_path / "characters" / "b.yaml").write_text("name_ko: B\nanima: b\nai_hide: true\n", encoding="utf-8")
     assert [r[1] for r in nk_easy._char_rows(str(tmp_path))] == ["a"]
 
 

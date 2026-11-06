@@ -203,7 +203,7 @@ class App:
         return False
 
     def _cuts_secs(self, plan, skip=()):
-        """계획표(Grok 답) -> 컷마다 예상 초 (그린 컷 번호 skip 은 뺌)"""
+        """계획표(AI 답) -> 컷마다 예상 초 (그린 컷 번호 skip 은 뺌)"""
         lora = self._lora_files()
         fsec = 0 if self._face_on(plan) else 20
         cast = plan.get("cast") or {}
@@ -382,7 +382,7 @@ class App:
         kind = a[1] if len(a) > 1 else ""
         ep = a[2] if len(a) > 2 and EP_RE.match(a[2]) else ""
         KO = {"paste": "새 만화", "auto": "만들기", "fix": "컷 다시 그리기", "cands": "후보 3장", "usecand": "후보로 바꾸기",
-              "letter": "말풍선 다시", "grokfile": "Grok 첨부 파일", "animatest": "시험", "trainanima": "학습",
+              "letter": "말풍선 다시", "aifile": "AI 첨부 파일", "animatest": "시험", "trainanima": "학습",
               "regionlora": "두 명 컷 영역 LoRA", "animamake": "Anima 그리기", "animafix": "LoRA 캐릭터 다시 그리기"}
         name = ((ep + " ") if ep else "") + KO.get(kind, kind or "작업")
         try:
@@ -410,7 +410,7 @@ class App:
                 return n * 130, name
             if kind in ("usecand", "letter"):
                 return self.SEC_TAIL, name
-            if kind == "grokfile":
+            if kind == "aifile":
                 return 5, name
             if kind == "trainanima":
                 return 1400, name
@@ -837,7 +837,7 @@ class App:
         ep = str(b.get("ep", ""))
         rid = str(b.get("root") or "0")
         self.base(rid)
-        if kind != "grokfile" and not EP_RE.match(ep):
+        if kind != "aifile" and not EP_RE.match(ep):
             raise ValueError("에피소드 이름이 이상함: %r" % ep)
 
         def tags(v):
@@ -901,15 +901,15 @@ class App:
             if name != "none" and name not in self.flows(rid):
                 raise ValueError("그 폴더의 workflows 에 없는 워크플로: %s" % name)
             return ["ep", "flow", "set", name, "--ep", ep], "%s 그림 워크플로 -> %s" % (ep, name if name != "none" else "기본"), rid
-        if kind == "grokfile":
-            return ["ep", "grokfile"], "Grok 첨부 파일 만들기", "0"
+        if kind == "aifile":
+            return ["ep", "aifile"], "AI 첨부 파일 만들기", "0"
         if kind == "paste":
             text = str(b.get("text") or "")
             if not text.strip() or len(text) > 200000:
                 raise ValueError("붙여 넣은 글이 없거나 너무 김")
             d = self.ep_dir(ep, rid)
             os.makedirs(d, exist_ok=True)
-            fp = os.path.join(d, "grok_answer_%s.md" % time.strftime("%m%d_%H%M%S"))
+            fp = os.path.join(d, "ai_answer_%s.md" % time.strftime("%m%d_%H%M%S"))
             open(fp, "w", encoding="utf-8").write(text)
             args = ["ep", "paste", ep, "--file", fp]
             fl = str(b.get("flow") or "")
@@ -919,7 +919,7 @@ class App:
                 args += ["--flow", fl]
             if b.get("go"):
                 args.append("--go")
-            return args, "%s Grok 답 검사%s" % (ep, " + 바로 만들기" if b.get("go") else ""), rid
+            return args, "%s AI 답 검사%s" % (ep, " + 바로 만들기" if b.get("go") else ""), rid
         raise ValueError("모르는 작업: %s" % kind)
 
     def add_job(self, args, note, rid="0"):
@@ -1183,7 +1183,7 @@ class App:
         return "맨 앞에 뒀어 — 바로 시작해"
 
     def check_plan(self, b):
-        """글콘티 검사하기: Grok 답을 바로 검사해서 결과를 돌려줌 (작업 줄을 안 거침, 그림 안 그림, 몇 초).
+        """글콘티 검사하기: AI 답을 바로 검사해서 결과를 돌려줌 (작업 줄을 안 거침, 그림 안 그림, 몇 초).
         -> {passed, can_make, error, fix_prompt, title, pages, cuts, est_s}"""
         rid, ep = str(b.get("root") or "0"), str(b.get("ep") or "")
         text = str(b.get("text") or "")
@@ -1193,7 +1193,7 @@ class App:
             raise ValueError("붙여 넣은 글이 없거나 너무 김")
         d = self.ep_dir(ep, rid)
         os.makedirs(d, exist_ok=True)
-        fp = os.path.join(d, "grok_answer_%s.md" % time.strftime("%m%d_%H%M%S"))
+        fp = os.path.join(d, "ai_answer_%s.md" % time.strftime("%m%d_%H%M%S"))
         open(fp, "w", encoding="utf-8").write(text)
         args = ["ep", "paste", ep, "--file", fp]
         fl = str(b.get("flow") or "")
@@ -2038,11 +2038,11 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
       <div id="rootbtns" class="row" style="margin-bottom:6px"></div>
       <div id="rootnote" class="mute" style="font-size:12px;margin-bottom:6px"></div>
       <div id="eps" class="eplist"></div></section>
-    <section><h2>새 만화 (Grok 답 붙여 넣기)</h2>
-      <div class="row" style="margin-bottom:6px"><button id="b-grok">Grok 첨부 파일 만들기</button></div>
-      <div class="mute" style="font-size:12.5px;margin-bottom:6px">Grok_첨부용.md 를 Grok에 첨부하고 만들고 싶은 만화를 말하면, Grok이 계획표(YAML)를 줌. 그 답 전체를 아래에 붙여 넣기.
-        Grok 한도가 차면 같은 파일을 Gemini·ChatGPT 무료에 첨부해도 됨.</div>
-      <details id="req" style="margin-bottom:8px"><summary style="cursor:pointer;font-size:13px"><b>Grok 에 보낼 요청 글 만들기</b> (칸을 채우면 복사)</summary>
+    <section><h2>새 만화 (AI 답 붙여 넣기)</h2>
+      <div class="row" style="margin-bottom:6px"><button id="b-aifile">AI 첨부 파일 만들기</button></div>
+      <div class="mute" style="font-size:12.5px;margin-bottom:6px">AI_첨부용.md 를 AI 채팅에 첨부하고 만들고 싶은 만화를 말하면, AI가 계획표(YAML)를 줌. 그 답 전체를 아래에 붙여 넣기.
+        ChatGPT·Gemini 같은 아무 AI 채팅이나 됨 (무료판도 됨).</div>
+      <details id="req" style="margin-bottom:8px"><summary style="cursor:pointer;font-size:13px"><b>AI 채팅에 보낼 요청 글 만들기</b> (칸을 채우면 복사)</summary>
         <div style="display:grid;gap:4px;margin-top:6px;font-size:12.5px">
           <input id="rq-cast" placeholder="등장 캐릭터 (예: 여우, 토끼)">
           <div class="row"><select id="rq-pages"><option>1</option><option selected>2</option><option>3</option><option>4</option></select><span class="mute">쪽</span>
@@ -2052,14 +2052,14 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:
           <input id="rq-scene" placeholder="꼭 넣을 장면 (없으면 비움, 예: 여우가 나무에서 떨어지는 장면)">
           <input id="rq-tags" placeholder="꼭 넣을 태그 (없으면 비움, 예: 비, 우산)">
           <input id="rq-end" placeholder="끝 반전·마무리 (없으면 비움, 예: 구하러 간 여우가 오히려 구조받음)">
-          <label><input type="checkbox" id="rq-first"> 줄거리 먼저 보기 (Grok 이 줄거리만 먼저 → '좋아'라고 하면 계획표)</label>
+          <label><input type="checkbox" id="rq-first"> 줄거리 먼저 보기 (AI가 줄거리만 먼저 → '좋아'라고 하면 계획표)</label>
           <div class="row"><button id="b-req">요청 글 만들기 + 복사</button></div>
-          <textarea id="rq-out" placeholder="여기 만든 글이 나옴 → Grok 새 대화에 Grok_첨부용.md 첨부 + 이 글 붙여 넣기" style="min-height:90px"></textarea>
+          <textarea id="rq-out" placeholder="여기 만든 글이 나옴 → AI 채팅 새 대화에 AI_첨부용.md 첨부 + 이 글 붙여 넣기" style="min-height:90px"></textarea>
         </div></details>
       <div class="row" style="margin-bottom:6px"><input id="new-ep" placeholder="에피소드 이름" style="width:170px"></div>
       <div class="row" style="margin-bottom:6px"><span class="mute" style="font-size:12.5px">저장할 곳</span><select id="new-root" style="max-width:100%"></select></div>
       <div class="row" style="margin-bottom:6px"><span class="mute" style="font-size:12.5px">그림 워크플로 (옛 NoobAI 흐름만 — 보통 '기본')</span><select id="new-flow" style="max-width:100%"></select></div>
-      <textarea id="new-text" placeholder="Grok 답 전체"></textarea>
+      <textarea id="new-text" placeholder="AI 답 전체"></textarea>
       <div class="row" style="margin-top:6px"><button id="b-check" class="pri">글콘티 검사하기</button><span class="mute" style="font-size:12px">통과하면 바로 작업 줄에, 고칠 점이 있으면 창으로 알려 줌</span></div>
     </section>
   </div>
@@ -2240,8 +2240,8 @@ async function loadEp(ep,keep){
     (d.anima?"":"<div class='row mute' style='margin:4px 0;font-size:12.5px'>그림 워크플로 <select id='s-flow'>"+["none"].concat(d.flows||[]).map(f=>"<option value='"+esc(f)+"'"+((d.flow||"none")===f?" selected":"")+">"+(f==="none"?"기본 (nk 그리기)":esc(f))+"</option>").join("")+"</select>"+
     (d.flow&&(d.flows||[]).indexOf(d.flow)<0?"<span class='bad'>파일 없음: "+esc(d.flow)+"</span>":"")+"<span>혼자 컷만 · 바꾼 뒤 '이어서 만들기'를 make부터</span></div>")+
     "<div class='steps'>"+st+"</div>"+
-    (d.fix_prompt?"<div class='fixp' style='margin-top:8px;padding:8px;border:1px solid #d9a441;border-radius:6px'><b>Grok 에 돌려줄 고칠 점</b> <button id='b-fixcopy'>복사</button>"+
-      "<div class='mute' style='font-size:12.5px'>Grok 같은 대화에 붙여 넣고 → 새 답을 '새 만화'에 다시 붙여 넣기 (아직 안 그렸으면 같은 이름, 이미 그렸으면 새 이름). 안 고치고 그대로 만들어도 됨 ('이어서 만들기').</div>"+
+    (d.fix_prompt?"<div class='fixp' style='margin-top:8px;padding:8px;border:1px solid #d9a441;border-radius:6px'><b>AI에게 돌려줄 고칠 점</b> <button id='b-fixcopy'>복사</button>"+
+      "<div class='mute' style='font-size:12.5px'>AI 채팅의 같은 대화에 붙여 넣고 → 새 답을 '새 만화'에 다시 붙여 넣기 (아직 안 그렸으면 같은 이름, 이미 그렸으면 새 이름). 안 고치고 그대로 만들어도 됨 ('이어서 만들기').</div>"+
       "<pre style='white-space:pre-wrap;margin:6px 0 0'>"+esc(d.fix_prompt)+"</pre></div>":"");
   if(!d.pages.length&&epView==="pages")epView="cuts";
   h+="<div class='row viewsw' style='margin-top:10px'><button id='v-pages' class='"+(epView==="pages"?"on":"")+"'"+(d.pages.length?"":" disabled")+">전체 만화 보기</button><button id='v-cuts' class='"+(epView==="cuts"?"on":"")+"'>컷별로 보기 ("+d.cuts.length+")</button></div>";
@@ -2266,7 +2266,7 @@ async function loadEp(ep,keep){
   document.querySelectorAll("[data-z]").forEach(i=>i.onclick=()=>zoom(i.dataset.z));
   document.querySelectorAll("[data-raw]").forEach(b=>b.onclick=()=>zoom(b.dataset.raw));
   if(d.review)$("#b-review").onclick=()=>zoom(d.review);
-  if(d.fix_prompt)$("#b-fixcopy").onclick=async()=>{try{await navigator.clipboard.writeText(d.fix_prompt);toast("복사함 — Grok 같은 대화에 붙여 넣기")}catch(e){toast("복사 안 됨 — 글을 직접 드래그해서 복사",6000)}};
+  if(d.fix_prompt)$("#b-fixcopy").onclick=async()=>{try{await navigator.clipboard.writeText(d.fix_prompt);toast("복사함 — AI 채팅의 같은 대화에 붙여 넣기")}catch(e){toast("복사 안 됨 — 글을 직접 드래그해서 복사",6000)}};
   $("#b-auto").onclick=()=>job({kind:"auto",ep:ep,from:$("#s-from").value});
   $("#b-letter").onclick=()=>job({kind:"letter",ep:ep});
   if($("#s-flow"))$("#s-flow").onchange=()=>job({kind:"setflow",ep:ep,flow:$("#s-flow").value},"그림 워크플로 바꾸기");
@@ -2300,26 +2300,26 @@ async function loadEp(ep,keep){
 }
 $("#b-kill").onclick=async()=>{if(!confirm("지금 도는 작업을 멈출까요?\n그리던 그림 1장은 버려지고, 만화 작업이면 '멈춘 작업'으로 남아서 '이어서 시작'으로 이어 갈 수 있어."))return;try{const j=await post("/api/kill");toast("멈춤: "+j.job+" — 작업 줄 맨 끝 '⏸ 멈춤'에서 이어서 시작",7000);refresh()}catch(e){toast(e.message)}};
 $("#b-runner").onclick=async()=>{try{const j=await post("/api/runner");toast(j.msg)}catch(e){toast(e.message)}};
-$("#b-grok").onclick=()=>job({kind:"grokfile",root:"0"},"Grok 첨부 파일 만들기 (키트 폴더의 Grok_첨부용.md)");
-function paste(go){const ep=$("#new-ep").value.trim(), t=$("#new-text").value;if(!ep||!t.trim()){toast("이름과 Grok 답을 넣어 주세요");return}job({kind:"paste",ep:ep,text:t,go:go,root:$("#new-root").value,flow:$("#new-flow").value})}
+$("#b-aifile").onclick=()=>job({kind:"aifile",root:"0"},"AI 첨부 파일 만들기 (키트 폴더의 AI_첨부용.md)");
+function paste(go){const ep=$("#new-ep").value.trim(), t=$("#new-text").value;if(!ep||!t.trim()){toast("이름과 AI 답을 넣어 주세요");return}job({kind:"paste",ep:ep,text:t,go:go,root:$("#new-root").value,flow:$("#new-flow").value})}
 async function loadFlows(){try{const f=await get("/api/flows?root="+encodeURIComponent($("#new-root").value||"0"));$("#new-flow").innerHTML="<option value=''>기본 (nk 그리기)</option>"+(f.flows||[]).map(x=>"<option>"+esc(x)+"</option>").join("")}catch(e){}}
 $("#new-root").onchange=loadFlows;
 async function checkPlan(){const ep=$("#new-ep").value.trim(), t=$("#new-text").value, root=$("#new-root").value;
-  if(!ep||!t.trim()){toast("에피소드 이름과 Grok 답을 넣어 줘");return}
+  if(!ep||!t.trim()){toast("에피소드 이름과 AI 답을 넣어 줘");return}
   modal("<h2>글콘티 검사 중…</h2><div class='mute'>몇 초 걸려 (그림은 안 그림)</div>");
   let r;try{r=await post("/api/check",{root:root,ep:ep,text:t,flow:$("#new-flow").value})}catch(e){modal("<h2 class='bad'>검사를 못 했어</h2><div>"+esc(e.message)+"</div><div class='row' style='margin-top:12px'><button class='pri' id='m-ok'>확인</button></div>");$("#m-ok").onclick=modalClose;return}
   const info="<div class='mute' style='margin:4px 0 10px'>"+esc(r.title||ep)+(r.pages?" · "+r.pages+"쪽 "+r.cuts+"컷":"")+(r.est_s?" · 만들기 약 "+mins(r.est_s)+" (추정)":"")+"</div>";
   const make=async()=>{await job({kind:"auto",ep:ep,root:root},"작업 줄에 넣음");$("#new-text").value="";$("#new-ep").value="";loadEps()};
   const notes=(r.notes||[]).length?"<div class='mute' style='margin-top:8px'><b>참고</b> (만들기는 그대로 진행 — 마음에 걸리면 나중에 컷 수정으로)<ul style='margin:4px 0 0 18px;padding:0'>"+r.notes.map(n=>"<li>"+esc(n)+"</li>").join("")+"</ul></div>":"";
   if(r.passed){await make();modal("<div class='ok'>✓ 검사 통과!</div>"+info+"<div>작업 줄에 넣었어 — 위 진행 창에서 볼 수 있어.</div>"+notes+"<div class='row' style='margin-top:12px'><button class='pri' id='m-ok'>확인</button></div>");$("#m-ok").onclick=modalClose;return}
-  if(!r.can_make){modal("<h2 class='bad'>✗ 검사 불통과 — 이대로는 못 만들어</h2>"+info+"<div class='bad'>"+esc(r.error||"이유를 못 읽음")+"</div><div class='mute' style='margin-top:8px'>Grok 답 전체를 복사했는지, 캐릭터·이름이 맞는지 확인하고 다시 붙여 넣어 줘.</div><div class='row' style='margin-top:12px'><button class='pri' id='m-ok'>확인</button></div>");$("#m-ok").onclick=modalClose;return}
+  if(!r.can_make){modal("<h2 class='bad'>✗ 검사 불통과 — 이대로는 못 만들어</h2>"+info+"<div class='bad'>"+esc(r.error||"이유를 못 읽음")+"</div><div class='mute' style='margin-top:8px'>AI 답 전체를 복사했는지, 캐릭터·이름이 맞는지 확인하고 다시 붙여 넣어 줘.</div><div class='row' style='margin-top:12px'><button class='pri' id='m-ok'>확인</button></div>");$("#m-ok").onclick=modalClose;return}
   const probs=(r.fix_prompt||"").split("\n").filter(l=>l.trim().startsWith("- ")).map(l=>"<li>"+esc(l.trim().slice(2))+"</li>").join("");
   modal("<h2 class='bad'>✗ 검사 불통과 — 이대로면 만화가 통째로 틀어져</h2>"+info+(r.error?"<div class='bad'>"+esc(r.error)+"</div>":"")+"<b>큰 문제</b><ul style='margin:4px 0 8px 18px;padding:0'>"+probs+"</ul>"+notes+
-    "<b>Grok 에 다시 붙여 넣을 글</b> <button id='m-copy'>복사</button><textarea id='m-fix' readonly>"+esc(r.fix_prompt||"")+"</textarea>"+
-    "<div class='mute' style='font-size:12.5px;margin-top:4px'>Grok 같은 대화에 붙여 넣고 → 새 답을 같은 이름으로 다시 '글콘티 검사하기'. 작업 줄에는 아직 안 넣었어.</div>"+
+    "<b>AI 채팅에 다시 붙여 넣을 글</b> <button id='m-copy'>복사</button><textarea id='m-fix' readonly>"+esc(r.fix_prompt||"")+"</textarea>"+
+    "<div class='mute' style='font-size:12.5px;margin-top:4px'>AI 채팅의 같은 대화에 붙여 넣고 → 새 답을 같은 이름으로 다시 '글콘티 검사하기'. 작업 줄에는 아직 안 넣었어.</div>"+
     "<div class='row' style='margin-top:12px'><button class='pri' id='m-ok'>확인 (고쳐서 다시 할게)</button><button id='m-go'>수정 없이 바로 만화 만들기</button></div>");
   $("#m-ok").onclick=modalClose;
-  $("#m-copy").onclick=async()=>{try{await navigator.clipboard.writeText(r.fix_prompt||"");toast("복사함 — Grok 같은 대화에 붙여 넣기")}catch(e){$("#m-fix").select();toast("글을 직접 복사해 줘")}};
+  $("#m-copy").onclick=async()=>{try{await navigator.clipboard.writeText(r.fix_prompt||"");toast("복사함 — AI 채팅의 같은 대화에 붙여 넣기")}catch(e){$("#m-fix").select();toast("글을 직접 복사해 줘")}};
   $("#m-go").onclick=async()=>{await make();modal("<div class='ok'>작업 줄에 넣었어</div>"+info+"<div>고칠 점은 그대로 두고 만들어.</div><div class='row' style='margin-top:12px'><button class='pri' id='m-ok'>확인</button></div>");$("#m-ok").onclick=modalClose}}
 $("#b-check").onclick=checkPlan;
 async function clearDone(undo){try{await post("/api/cleardone",{undo:!!undo});toast(undo?"지웠던 작업을 다시 보이게 함":"잘 끝난 작업을 목록에서 지움 — 그림·기록·대기열은 그대로 (실패한 작업은 남김)",5000);refresh()}catch(e){toast("안 됨: "+e.message,7000)}}
@@ -2334,7 +2334,7 @@ $("#b-req").onclick=async()=>{const v=id=>$("#"+id).value.trim();
   if(v("rq-end"))L.push("- 끝 반전·마무리: "+v("rq-end"));
   if($("#rq-first").checked)L.push("","줄거리 먼저: 이번에는 줄거리만 보여 줘. 내가 좋다고 하면 그때 계획표(YAML)를 써 줘.");
   const t=L.join("\n");$("#rq-out").value=t;
-  try{await navigator.clipboard.writeText(t);toast("복사함 — Grok 새 대화에 Grok_첨부용.md 첨부 + 붙여 넣기",6000)}catch(e){toast("아래 글을 직접 복사해 줘",5000)}};
+  try{await navigator.clipboard.writeText(t);toast("복사함 — AI 채팅 새 대화에 AI_첨부용.md 첨부 + 붙여 넣기",6000)}catch(e){toast("아래 글을 직접 복사해 줘",5000)}};
 loadRoots().then(()=>{loadEps();loadFlows()});refresh();setInterval(refresh,5000);setInterval(loadEps,60000);
 </script></body></html>
 """

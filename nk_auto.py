@@ -510,8 +510,8 @@ def step_write(nk, kit, W, args, rec):
     rc, _ = _call(nk_plan.run_write, nk, kit, _ns(ep=args.ep, backend=args.writer, model=args.model, ctx=16384, temperature=0.7,
                                                   fix=2, cpu=False, nocompile=True, out=None))
     if args.writer == "prompt":
-        print("\n[STOP] 사람 차례 (Grok):\n  1. episodes\\%s\\write_prompt.md 내용을 전부 복사해서 Grok에 붙여 넣기\n"
-              "  2. Grok 답을 전부 복사해서 episodes\\%s\\plan.yaml 로 저장 (설명 문장·```yaml 이 섞여 있어도 됨)\n"
+        print("\n[STOP] 사람 차례 (AI 채팅):\n  1. episodes\\%s\\write_prompt.md 내용을 전부 복사해서 AI 채팅에 붙여 넣기\n"
+              "  2. AI 답을 전부 복사해서 episodes\\%s\\plan.yaml 로 저장 (설명 문장·```yaml 이 섞여 있어도 됨)\n"
               "  3. 다시: nk ep auto %s" % (args.ep, args.ep, args.ep))
         sys.exit(0)
     return rc

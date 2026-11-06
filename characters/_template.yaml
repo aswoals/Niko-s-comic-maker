@@ -4,12 +4,12 @@
 #  자세한 안내: docs/ADDING.md
 #  ※ 전연령 전용: 성인·선정적 묘사, 실존 인물, 남의 저작권 캐릭터를 허락 없이 쓰지 않는다 (USE_POLICY.md).
 # ============================================================
-grok_hide: true                 # 이 줄은 양식 전용. 진짜 캐릭터 파일에서는 지운다.
+ai_hide: true                 # 이 줄은 양식 전용. 진짜 캐릭터 파일에서는 지운다.
 
 # ---------- 기본 (꼭 채우기) ----------
 name: mychar                    # 파일 이름과 같게 (영어 소문자)
 trigger: mychar                 # NoobAI 흐름의 첫 태그 (LoRA 트리거 단어, LoRA 가 없으면 캐릭터 태그나 이름)
-name_ko: 내 캐릭터               # 한국어 이름 (Grok 첨부 파일·작업실에 나옴)
+name_ko: 내 캐릭터               # 한국어 이름 (AI 첨부 파일·작업실에 나옴)
 personality: 밝고 장난스러움. 짧은 반말.   # 성격·말투 한 줄 (대사가 이 말투로 써짐)
 
 # 외형 태그 (Danbooru/e621 태그, 쉼표로). short = 트리거+핵심, full = 외형 전부
@@ -55,8 +55,8 @@ compose_name: orange fox boy            # 두 명 합치기·편집 문장에서
 # hands: {tags: "orange fur, paw pads", desc: "fox paw hand", expect: bright}   # 손 색 검사 (expect: dark / bright)
 # forbid: "extra tail"                  # 판별기에 걸리면 안 되는 태그
 
-# ---------- Grok 첨부 파일 ----------
-# grok_note: "LoRA 로 그림"             # 캐릭터 목록에 붙는 메모
+# ---------- AI 첨부 파일 ----------
+# ai_note: "LoRA 로 그림"             # 캐릭터 목록에 붙는 메모
 
 # ---------- 자동 검수 (nk qa, 로컬 VLM) — '무슨 값인가?'로 묻기 (docs/conti_rules.md 4절) ----------
 qa_desc: "an orange fox boy in a blue hoodie"

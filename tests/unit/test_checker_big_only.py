@@ -171,7 +171,7 @@ def test_anima_tags_and_neg_flow_to_cut_text():
     assert "anima_tags" not in c3 and "anima_neg" not in c3
 
 
-def test_grok_artist_note_points_to_presets():
+def test_ai_artist_note_points_to_presets():
     """작가 목록은 코드에 박지 않고 presets.yaml(main_artists·artist_note)에서"""
     import nk_easy
     assert nk_plan.ARTISTS_LISTED == () and "main_artists" in nk_easy.ARTIST_NOTE
