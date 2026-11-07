@@ -2528,7 +2528,45 @@ def _wrap(draw, text, font, maxw):
                     lines.append(cur)
                     cur = ch
         lines.append(cur)
-    return lines
+    for i in range(1, len(lines)):                      # 문장부호만 다음 줄로 넘어가지 않게 (앞 줄 끝에 붙임)
+        while lines[i] and lines[i][0] in WRAP_PUNCT and lines[i - 1]:
+            lines[i - 1] += lines[i][0]
+            lines[i] = lines[i][1:]
+    return [l for l in lines if l] or [""]
+
+
+WRAP_PUNCT = ".,!?…~♡)」』'\"%—"
+
+# 한국식(왼→오) 읽기: 콘티의 말풍선 자리는 일본식(오른쪽 위가 처음)으로 정해져 있어서 좌우를 뒤집음
+MIRROR = {"tl": "tr", "tr": "tl", "bl": "br", "br": "bl", "left": "right", "right": "left"}
+# 작은 칸에서 말풍선이 칸을 덮지 않게: (글씨 배율, 풍선 최대 폭 = 칸 폭 x 비율) 순서로 해 보고 처음 맞는 것
+FIT_STEPS = ((1.0, None), (1.0, 0.55), (0.9, 0.58), (0.82, 0.62), (0.75, 0.66))
+
+
+def _fit_text(draw, text, panel, st, fs0, ratio0, font_of, pad_w=2.0, pad_h=1.6, max_frac=0.9):
+    """글씨 크기·줄바꿈 정하기. 풍선 하나가 칸 넓이의 일정 몫(같은 칸 글자 수로 나눔)보다 크거나 4줄 이상이면
+    글씨를 조금씩 줄이고 폭을 넓힘. 돌려줌: (font, fsize, text, lines)"""
+    px, py, pw, ph = panel
+    texts = [t for t in ((st.get("_cut") or {}).get("text") or []) if str(t.get("type", "speech")) != "sfx"]
+    limit = min(0.24, 0.45 / max(1, len(texts))) * pw * ph
+    out = None
+    for sc, r in FIT_STEPS:
+        fsize = max(12, int(fs0 * sc))
+        font = font_of(fsize)
+        t2 = text
+        try:
+            import nk_letter2
+            t2 = nk_letter2.fit_text(text, font)
+        except Exception:
+            pass
+        maxw = int(min(pw * max_frac, max(pw * min(max(r or 0, ratio0), max_frac), fsize * 4)))
+        lines = _wrap(draw, t2, font, maxw)
+        tw = max(draw.textlength(l, font=font) for l in lines)
+        area = (tw + fsize * pad_w) * (len(lines) * fsize * 1.3 + fsize * pad_h)
+        out = (font, fsize, t2, lines)
+        if area <= limit and len(lines) <= 3:
+            break
+    return out
 
 
 ANCHOR = {"tl": (0.04, 0.04), "tr": (0.96, 0.04), "bl": (0.04, 0.96), "br": (0.96, 0.96),
@@ -2647,7 +2685,7 @@ def _smart_at(box_w, box_h, panel, at, st, near_x=None):
     occ = st.setdefault("_occupied", [])
     if E is None:
         return _place(box_w, box_h, panel, at)
-    heads = [h for h in st.get("_heads", []) if h[4] == id(st.get("_cut"))]
+    heads = [h for h in st.get("_heads", []) if h[4] == st.get("_cut_oid", id(st.get("_cut")))]
     PM = st.get("_people")
     near = NEAR.get(at, [at])
     px, py, pw, ph = panel
@@ -2655,18 +2693,55 @@ def _smart_at(box_w, box_h, panel, at, st, near_x=None):
     # 정한 자리 근처(모서리 8곳)만 보던 것 -> 칸 안 격자 5x5까지 봄 (빈 하늘·땅이 있으면 그리로). 정한 자리에서 멀수록 조금 감점
     ax0, ay0 = _place(box_w, box_h, panel, at)
     m = 6
-    for fx in (0.0, 0.25, 0.5, 0.75, 1.0):
-        for fy in (0.0, 0.25, 0.5, 0.75, 1.0):
+    grid = (0.0, 1 / 6.0, 2 / 6.0, 0.5, 4 / 6.0, 5 / 6.0, 1.0)      # 7x7 (빈자리를 더 촘촘히 찾음)
+    for fx in grid:
+        for fy in grid:
             x = px + m + fx * max(0, pw - box_w - 2 * m)
             y = py + m + fy * max(0, ph - box_h - 2 * m)
             dist = (((x - ax0) / max(1.0, pw)) ** 2 + ((y - ay0) / max(1.0, ph)) ** 2) ** 0.5
             cands.append(((int(x), int(y)), 0.1 + 0.2 * dist))
+    kind = st.get("_kind", "speech")
+    if st.get("_offscreen") and kind != "sfx":         # 화면 밖 대사: 칸 테두리에 걸친 자리도 봄 (바깥에서 들리는 목소리, 조금 우대)
+        PW, PH = st.get("width") or 10 ** 6, st.get("height") or 10 ** 6
+        for side in ("top", "bottom", "left", "right"):
+            for f in (0.15, 0.5, 0.85):
+                if side in ("top", "bottom"):
+                    x = px + f * max(0, pw - box_w)
+                    y = py - box_h * 0.4 if side == "top" else py + ph - box_h * 0.6
+                else:
+                    y = py + f * max(0, ph - box_h)
+                    x = px - box_w * 0.4 if side == "left" else px + pw - box_w * 0.6
+                x, y = min(max(0, x), PW - box_w), min(max(0, y), PH - box_h)
+                cands.append(((int(x), int(y)), 0.05))
+    # 읽는 순서: 같은 칸에서 앞서 놓은 글자(효과음 빼고)보다 먼저 읽히는 자리는 감점 (한국식 = 위·왼쪽이 먼저)
+    cid = ((st.get("_cut") or {}).get("id"), (st.get("_cut") or {}).get("page"))
+    prev = st.get("_prev_box") if (kind != "sfx" and st.get("_prev_cut") == cid) else None
+    ltr = bool(st.get("_ltr"))
+    others_x = _others_x(panel, st) if near_x is not None else []
     best, best_sc = None, None
     for (x, y), pen in cands:
         crop = E.crop((max(0, x), max(0, y), x + box_w, y + box_h))
         h = crop.histogram()
         busy = sum(i * c for i, c in enumerate(h)) / max(1, sum(h)) / 255.0
-        ov = any(not (x + box_w < ox or ox + ow < x or y + box_h < oy or oy + oh < y) for ox, oy, ow, oh in occ)
+        ovf = 0.0                                       # 다른 글자와 겹치는 넓이 비율 (조금 띄워서 봄) — 겹칠수록 크게 감점
+        for ox, oy, ow, oh in occ:
+            iw_o = min(x + box_w, ox + ow + OCC_PAD) - max(x, ox - OCC_PAD)
+            ih_o = min(y + box_h, oy + oh + OCC_PAD) - max(y, oy - OCC_PAD)
+            if iw_o > 0 and ih_o > 0:
+                ovf = max(ovf, iw_o * ih_o / float(max(1, box_w * box_h)))
+        order = 0.0
+        tk, tn = st.get("_text_kn") or (0, 1)
+        if kind != "sfx" and tn >= 2:                   # 같은 칸에 글자가 여럿이면 앞 대사는 위쪽, 뒤 대사는 아래쪽을 조금 선호
+            y_rel = (y - py) / float(max(1, ph - box_h))
+            order += 1.0 * abs(y_rel - tk / float(tn - 1))
+        if prev is not None:
+            qx, qy, qw, qh = prev
+            if y + box_h * 0.5 < qy:
+                order += 2.5
+            elif not (y + box_h < qy or qy + qh < y):
+                c_new, c_old = x + box_w / 2.0, qx + qw / 2.0
+                if (c_new < c_old) if ltr else (c_new > c_old):
+                    order += 2.5
         face = 0.0
         for hx0, hy0, hx1, hy1, _ in heads:
             iw_ = max(0, min(x + box_w, hx1) - max(x, hx0))
@@ -2676,13 +2751,82 @@ def _smart_at(box_w, box_h, panel, at, st, near_x=None):
         if PM is not None:
             bh_ = PM.crop((max(0, x), max(0, y), x + box_w, y + box_h)).histogram()
             body = sum(i * c for i, c in enumerate(bh_)) / max(1, sum(bh_)) / 255.0    # 말풍선 넓이 중 몸 위에 있는 비율
-        sc = 0.6 * busy + pen + (2.0 if ov else 0) + 3.0 * face + 1.2 * body
+        sc = 0.6 * busy + pen + ((2.0 + 10.0 * ovf) if ovf > 0 else 0) + 3.0 * face + 1.2 * body + order
         if near_x is not None:
             sc += 0.8 * abs(x + box_w / 2.0 - near_x) / max(1.0, pw)
+            bx_ = x + box_w / 2.0                        # 두 명 컷: 말한 사람보다 다른 사람 쪽에 더 가까운 자리는 감점 (꼬리가 엉뚱한 사람을 가리킴)
+            if any(abs(bx_ - ox_) < abs(bx_ - near_x) for ox_ in others_x):
+                sc += 1.5
         if best_sc is None or sc < best_sc:
             best, best_sc = (x, y), sc
     occ.append((best[0], best[1], box_w, box_h))
+    if kind != "sfx":
+        st["_prev_box"], st["_prev_cut"] = (best[0], best[1], box_w, box_h), cid
     return best
+
+
+OCC_PAD = 8
+SMALL_PANEL = 0.12          # 쪽 넓이의 이 몫보다 작은 칸 = 작은 칸
+
+
+def _tail_len(base, fsize, dist, bw, bh, to_speaker):
+    """꼬리 길이: 말한 사람이 멀면 그쪽으로 더 길게 (말풍선 가장자리에서 사람까지의 55%%, 글자 4.5개 높이까지)"""
+    if not to_speaker:
+        return base
+    gap = max(0.0, dist - min(bw, bh) / 2.0)
+    return max(base, min(gap * 0.55, fsize * 4.5))
+
+
+def _others_x(panel, st):
+    """두 명 컷에서 이번 대사를 말하지 않은 사람들의 x (자리 고를 때 '다른 사람 쪽' 판단용)"""
+    who = str(st.get("_who") or "")
+    roles = (st.get("_cut") or {}).get("_roles") or []
+    out = []
+    for r, _ in roles:
+        if who and str(r.get("char")) != who:
+            p = _speaker_point({"who": r.get("char")}, panel, st)
+            if isinstance(p, tuple):
+                out.append(p[0])
+    return out
+
+
+def _bubble_colors(item, st):
+    """말풍선 (바탕, 선) 색. 캐릭터 파일의 bubble: {fill: "#...", line: "#..."} 를 씀.
+    콘티 bubble_color: all(기본) = 그 캐릭터 말풍선 전부 / offscreen = 화면 밖 대사만 / off = 안 씀"""
+    mode = str(st.get("_bubble_mode") or "all").lower()
+    ch = (st.get("_castmap") or {}).get(str(item.get("who") or ""))
+    b = (ch or {}).get("bubble") if isinstance(ch, dict) else None
+    if not isinstance(b, dict) or mode == "off" or (mode == "offscreen" and not st.get("_offscreen")):
+        return "white", "black"
+    return str(b.get("fill") or "white"), str(b.get("line") or "black")
+
+
+def _merge_same_speaker(items, small):
+    """작은 칸에서 같은 사람이 연달아 한 보통 대사는 말풍선 하나에 두 줄로 (자리가 모자라 순서가 뒤집히는 것을 막음)"""
+    if not small:
+        return list(items)
+    out = []
+    for it in items:
+        last = out[-1] if out else None
+        if (last is not None and str(it.get("type", "speech")) == "speech" and str(last.get("type", "speech")) == "speech"
+                and it.get("who") and it.get("who") == last.get("who") and "size" not in it and "size" not in last
+                and str(last.get("text", "")).count("\n") < 2):
+            out[-1] = dict(last, text="%s\n%s" % (last.get("text", ""), it.get("text", "")))
+        else:
+            out.append(it)
+    return out
+
+
+def _ellipse_exit(p0, p1, cx, cy, rx, ry):
+    """p0(타원 안) -> p1(밖) 선분이 타원 테두리를 지나는 점. p0 가 이미 밖이면 p0"""
+    ux, uy = (p0[0] - cx) / max(1e-6, rx), (p0[1] - cy) / max(1e-6, ry)
+    wx, wy = (p1[0] - p0[0]) / max(1e-6, rx), (p1[1] - p0[1]) / max(1e-6, ry)
+    a, b, c = wx * wx + wy * wy, 2 * (ux * wx + uy * wy), ux * ux + uy * uy - 1
+    if c >= 0 or a <= 0:
+        return p0
+    t = (-b + (b * b - 4 * a * c) ** 0.5) / (2 * a)
+    t = min(1.0, max(0.0, t))
+    return (p0[0] + t * (p1[0] - p0[0]), p0[1] + t * (p1[1] - p0[1]))
 
 
 def _final_heads(kit, ep, ct, img_path):
@@ -2833,10 +2977,19 @@ def _speaker_point(item, panel, st):
 
 
 def _draw_item(img, draw, item, panel, st, idx):
+    if st.get("_ltr") and str(item.get("type", "speech")) not in ("narration", "sfx") and item.get("at") in MIRROR:
+        item = dict(item, at=MIRROR[item["at"]])
+    st["_kind"] = "sfx" if str(item.get("type", "speech")) == "sfx" else "text"
+    allt = (st.get("_cut") or {}).get("text") or []
+    st["_text_kn"] = (sum(1 for t in allt[:idx] if str(t.get("type", "speech")) != "sfx"),
+                      sum(1 for t in allt if str(t.get("type", "speech")) != "sfx"))
+    st["_offscreen"] = st["_kind"] != "sfx" and (str(item.get("type")) == "offscreen" or _speaker_point(item, panel, st) == "offscreen")
+    st["_who"] = item.get("who")
     if st.get("v2"):
         import nk_letter2
         k2 = nk_letter2.bubble_kind(item)
         if k2 == "sfx":
+            st["_kind"] = "sfx"
             return nk_letter2.draw_sfx(img, item, panel, st, idx)
         if k2 in ("shout", "whisper", "tremble", "aside"):
             return nk_letter2.draw_bubble(img, draw, item, panel, st, idx, k2)
@@ -2854,12 +3007,16 @@ def _draw_item(img, draw, item, panel, st, idx):
     if kind == "sfx":
         ratio = st.get("sfx_ratio", 0.85)
     maxw = int(max(panel[2] * ratio, fsize * 4))
-    try:
-        import nk_letter2
-        text = nk_letter2.fit_text(text, font)
-    except Exception:
-        pass
-    lines = _wrap(draw, text, font, maxw)
+    if kind != "sfx" and "size" not in item:            # 말풍선·해설: 작은 칸이면 글씨를 줄이고 폭을 넓힘
+        font, fsize, text, lines = _fit_text(draw, text, panel, st, fsize, ratio, lambda s: _font(st.get("font"), s),
+                                             pad_w=1.2 if kind == "narration" else 2.0, pad_h=1.2 if kind == "narration" else 1.6)
+    else:
+        try:
+            import nk_letter2
+            text = nk_letter2.fit_text(text, font)
+        except Exception:
+            pass
+        lines = _wrap(draw, text, font, maxw)
     lh = int(fsize * 1.3)
     tw = max(draw.textlength(l, font=font) for l in lines)
     th = lh * len(lines)
@@ -2898,29 +3055,32 @@ def _draw_item(img, draw, item, panel, st, idx):
             vx, vy = -vx, -vy
         n = max(1.0, (vx * vx + vy * vy) ** 0.5)
         vx, vy = vx / n, vy / n
-        tail_len = fsize * 1.6
+        tail_len = _tail_len(fsize * 1.6, fsize, n, bw, bh, isinstance(spk, tuple) and not offscreen)
+        fill, ink = _bubble_colors(item, st)               # 캐릭터 파일 bubble: 말풍선 색 (없으면 흰 바탕·검은 선)
         if kind == "speech":
             base = (cx + vx * bw * 0.35, cy + vy * bh * 0.35)
             ox, oy = -vy * fsize * 0.45, vx * fsize * 0.45
             tip = (cx + vx * (bw / 2 + tail_len), cy + vy * (bh / 2 + tail_len))
             poly = [(base[0] + ox, base[1] + oy), (base[0] - ox, base[1] - oy), tip]
-            draw.polygon(poly, fill="white", outline="black")
-            draw.line([poly[0], tip, poly[1]], fill="black", width=lw)
-            draw.ellipse([x, y, x + bw, y + bh], fill="white", outline="black", width=lw)
+            # 꼬리를 풍선에 이어 붙임: 풍선을 먼저 그리고, 흰 꼬리로 이음매의 테두리를 덮은 뒤 풍선 밖 부분에만 선
+            draw.ellipse([x, y, x + bw, y + bh], fill=fill, outline=ink, width=lw)
+            draw.polygon(poly, fill=fill)
+            for p0 in poly[:2]:
+                draw.line([_ellipse_exit(p0, tip, cx, cy, bw / 2.0, bh / 2.0), tip], fill=ink, width=lw)
         else:  # thought: bumpy cloud + small circles
             for k in range(3):
                 r = fsize * (0.35 - k * 0.09)
                 ccx = cx + vx * (bw / 2 + fsize * (0.6 + k * 0.7))
                 ccy = cy + vy * (bh / 2 + fsize * (0.6 + k * 0.7))
-                draw.ellipse([ccx - r, ccy - r, ccx + r, ccy + r], fill="white", outline="black", width=max(2, lw - 1))
+                draw.ellipse([ccx - r, ccy - r, ccx + r, ccy + r], fill=fill, outline=ink, width=max(2, lw - 1))
             import math
             nb = 12
             for k in range(nb):
                 a = 2 * math.pi * k / nb
                 ex, ey = cx + math.cos(a) * bw / 2, cy + math.sin(a) * bh / 2
                 r = fsize * 0.9
-                draw.ellipse([ex - r, ey - r, ex + r, ey + r], fill="white", outline="black", width=max(2, lw - 1))
-            draw.ellipse([x, y, x + bw, y + bh], fill="white", outline=None)
+                draw.ellipse([ex - r, ey - r, ex + r, ey + r], fill=fill, outline=ink, width=max(2, lw - 1))
+            draw.ellipse([x, y, x + bw, y + bh], fill=fill, outline=None)
         tx, ty = cx - tw / 2, cy - th / 2
     for i, l in enumerate(lines):
         w_ = draw.textlength(l, font=font)
@@ -3048,6 +3208,10 @@ def page_letter(nk, kit, args, c):
     st = _page_style(cfg)
     st["bubble_ratio"] = st.get("bubble_w", 0.3)       # narrow bubbles -> taller, manga-like
     st["v2"] = str(c.get("letter") or "").lower() == "v2"
+    st["_ltr"] = str(c.get("read", "rtl")) == "ltr"
+    st["_castmap"] = c.get("_cast") or {}
+    bm = c.get("bubble_color", "all")                   # YAML 은 off 를 false 로 읽음
+    st["_bubble_mode"] = "off" if (bm is False or str(bm).lower() in ("false", "off", "no", "none", "0")) else str(bm or "all")
     picks = load_picks(kit, args.ep)
     cm = {}
     if c.get("color_match"):
@@ -3150,8 +3314,10 @@ def page_letter(nk, kit, args, c):
         spans = _real_spans(kit, args.ep)
         for ct in [x for x in c["cuts"] if int(x["page"]) == pn]:       # bubbles last so they may overlap frames
             x0, y0, x1, y1 = ct["rect"]
-            st["_cut"] = _with_real_spans(ct, spans)
-            for i, item in enumerate(ct.get("text", [])):
+            items = _merge_same_speaker(ct.get("text", []), (x1 - x0) * (y1 - y0) < SMALL_PANEL * W * H)
+            st["_cut"] = dict(_with_real_spans(ct, spans), text=items)
+            st["_cut_oid"] = id(ct)                     # 머리 상자는 원본 컷 기준 (사본을 만들어도 얼굴을 피하게)
+            for i, item in enumerate(items):
                 _draw_item(P, d, item, (x0, y0, x1 - x0, y1 - y0), st, i)
         d.text((W / 2 - 10, H - st["margin"] * 0.6), str(pn), fill="black", font=_font(st.get("font"), 22))
         P.save(os.path.join(out, "page_%02d.png" % pn))

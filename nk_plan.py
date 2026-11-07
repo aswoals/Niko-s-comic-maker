@@ -333,7 +333,8 @@ def compile_plan(plan, chars_info=None, kit=None):
         conti["pose3d"] = p3
     if plan.get("color_match"):
         conti["color_match"] = True
-    for k in ("char_tags", "gaze", "pose3d_arms", "hug_yaw", "pose3d_strength", "region_strength", "char_neg", "duo_strength", "scene3d_parts", "auto_retry", "hand_refine"):
+    for k in ("char_tags", "gaze", "pose3d_arms", "hug_yaw", "pose3d_strength", "region_strength", "char_neg", "duo_strength", "scene3d_parts", "auto_retry", "hand_refine",
+              "bubble_color"):
         if plan.get(k) not in (None, ""):
             conti[k] = plan[k]
     for k in ("anima_tags", "anima_neg"):
