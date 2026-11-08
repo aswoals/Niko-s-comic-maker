@@ -59,6 +59,9 @@ compose_name: orange fox boy            # 두 명 합치기·편집 문장에서
 # ---------- 글콘티용 첨부 파일 ----------
 # ai_note: "LoRA 로 그림"             # 캐릭터 목록에 붙는 메모
 
+# ---------- 말풍선 (선택) ----------
+# bubble: {fill: "#FFF0F5", line: "#D9578A"}   # 이 캐릭터 말풍선의 바탕·선 색. 계획표 bubble_color: all(기본) / offscreen(화면 밖 대사만) / off
+
 # ---------- 자동 검수 (nk qa, 로컬 VLM) — '무슨 값인가?'로 묻기 (docs/conti_rules.md 4절) ----------
 qa_desc: "an orange fox boy in a blue hoodie"
 qa_checklist:

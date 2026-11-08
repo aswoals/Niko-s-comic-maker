@@ -185,11 +185,17 @@ def draw_bubble(P, d, item, panel, st, idx, kind):
     else:
         fsize = fs0
         font = Wt._font(st.get("font"), fsize)
-    text = fit_text(text, font)
-    maxw = int(max(pw * st.get("bubble_ratio", 0.42), fsize * 4))
-    if kind == "aside" and len(text) <= 12:                 # 짧은 혼잣말은 한 줄로 ('치사하게...' 의 점이 다음 줄로 갈라짐)
-        maxw = max(maxw, int(d.textlength(text, font=font)) + 4)
-    lines = Wt._wrap(d, text, font, maxw)
+    if kind != "aside" and hasattr(Wt, "_fit_text"):        # 작은 칸이면 글씨를 줄이고 폭을 넓힘 (외침은 가시 몫까지 넉넉히)
+        of = {"shout": lambda s: ImageFont.truetype(font_path("hard"), s)}.get(kind, lambda s: Wt._font(st.get("font"), s))
+        font, fsize, text, lines = Wt._fit_text(d, text, panel, st, fsize, st.get("bubble_ratio", 0.42), of,
+                                                pad_w=3.2 if kind == "shout" else 2.0, pad_h=2.6 if kind == "shout" else 1.6,
+                                                max_frac=0.5 if kind == "shout" else 0.9)
+    else:
+        text = fit_text(text, font)
+        maxw = int(max(pw * st.get("bubble_ratio", 0.42), fsize * 4))
+        if kind == "aside" and len(text) <= 12:             # 짧은 혼잣말은 한 줄로 ('치사하게...' 의 점이 다음 줄로 갈라짐)
+            maxw = max(maxw, int(d.textlength(text, font=font)) + 4)
+        lines = Wt._wrap(d, text, font, maxw)
     lh = int(fsize * 1.32)
     tw = max(d.textlength(l, font=font) for l in lines)
     th = lh * len(lines)
@@ -219,23 +225,26 @@ def draw_bubble(P, d, item, panel, st, idx, kind):
     nrm = max(1.0, (vx * vx + vy * vy) ** 0.5); vx, vy = vx / nrm, vy / nrm
     pts = bubble_shape(kind, x, y, bw, bh, seed=hash((text, idx)) & 0xffff)
     tail_len = fsize * (2.2 if kind == "shout" else 1.6)
+    if hasattr(Wt, "_tail_len"):                            # 말한 사람이 멀면 그쪽으로 더 길게
+        tail_len = Wt._tail_len(tail_len, fsize, ((tx_ - cx) ** 2 + (ty_ - cy) ** 2) ** 0.5, bw, bh, isinstance(spk, tuple) and not off)
     tip = (cx + vx * (bw / 2.0 + tail_len), cy + vy * (bh / 2.0 + tail_len))
     base = (cx + vx * bw * 0.32, cy + vy * bh * 0.32)
     ox, oy = -vy * fsize * 0.45, vx * fsize * 0.45
     tail = [(base[0] + ox, base[1] + oy), tip, (base[0] - ox, base[1] - oy)]
-    d.polygon(tail, fill="white")
-    d.polygon(pts, fill="white")
+    fill, ink = Wt._bubble_colors(item, st) if hasattr(Wt, "_bubble_colors") else ("white", "black")   # 캐릭터 파일 bubble: 말풍선 색
+    d.polygon(tail, fill=fill)
+    d.polygon(pts, fill=fill)
     if kind == "whisper":                                   # 점선 테두리
         for k in range(0, len(pts), 2):
             a, b = pts[k], pts[(k + 1) % len(pts)]
-            d.line([a, b], fill="black", width=max(2, lw - 1))
-        d.line([tail[0], tip], fill="black", width=max(2, lw - 1)); d.line([tip, tail[2]], fill="black", width=max(2, lw - 1))
+            d.line([a, b], fill=ink, width=max(2, lw - 1))
+        d.line([tail[0], tip], fill=ink, width=max(2, lw - 1)); d.line([tip, tail[2]], fill=ink, width=max(2, lw - 1))
     else:
-        d.line(pts + [pts[0]], fill="black", width=lw + (1 if kind == "shout" else 0), joint="curve")
-        d.line([tail[0], tip, tail[2]], fill="black", width=lw)
-    d.polygon(pts, fill="white")                            # 꼬리 뿌리의 선을 덮음
+        d.line(pts + [pts[0]], fill=ink, width=lw + (1 if kind == "shout" else 0), joint="curve")
+        d.line([tail[0], tip, tail[2]], fill=ink, width=lw)
+    d.polygon(pts, fill=fill)                               # 꼬리 뿌리의 선을 덮음
     if kind != "whisper":
-        d.line(pts + [pts[0]], fill="black", width=lw + (1 if kind == "shout" else 0), joint="curve")
+        d.line(pts + [pts[0]], fill=ink, width=lw + (1 if kind == "shout" else 0), joint="curve")
     for i, l in enumerate(lines):
         w_ = d.textlength(l, font=font)
         d.text((cx - w_ / 2.0, cy - th / 2.0 + i * lh), l, font=font, fill="black")
