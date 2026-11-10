@@ -473,6 +473,8 @@ def compile_plan(plan, chars_info=None, kit=None):
                     if l.get(k2) is not None and t["type"] == "sfx":
                         t[k2] = l[k2]
                 t["at"] = l.get("at") or _at(t["type"], ns, nx)
+                if l.get("web_at"):
+                    t["web_at"] = str(l["web_at"])            # 웹툰판(nk_webview)에서만 쓰는 자리 tl/tr/bl/br. 쪽 조립은 안 봄
                 if t["type"] == "sfx":
                     nx += 1
                     if l.get("size"):

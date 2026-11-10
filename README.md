@@ -77,6 +77,11 @@ PC는 Windows 10이나 11, NVIDIA 그래픽카드(8GB에서 시험했다), 디�
   ```
   완성본은 `episodes/<화>/out*/page_*.png`와 `book.pdf`로 나오고, 한 장짜리 검토 그림은 `episodes/<화>/auto/review.png`에 생긴다.
   맨 앞 `page_00.png`(book.pdf 첫 쪽)는 표지다(제목, 주인공 그림, 'AI로 제작' 문구). 글자·그림은 `cover.yaml`에서 바꾸거나 끄고, `.\nk.bat ep cover ep01`로 표지만 다시 만든다.
+  웹툰판도 같이 나온다: `episodes/<화>/out*/webtoon/index.html`. 컷 하나가 화면 폭을 꽉 채우고 세로로 내려 보는 한 장짜리 HTML이다. 대사는 그림에 굽지 않고 글자로 그림 위에 올려서 폰에서도 컷과 글씨가 크게 보인다.
+  인터넷 없이 열리고(바깥 주소·자바스크립트 없음), `webtoon` 폴더째 옮기거나 올리면 된다. 그림은 `webtoon/img/`, 글꼴은 `fonts/`의 것을 복사해 쓴다.
+  끄려면 `presets.yaml`의 `manga:` 아래 `webview: false`. 대사만 고쳤을 때는 `.\nk.bat ep webview ep01`로 웹툰판만 다시 만든다(`--style 이름`을 붙이면 그림체판 `out_이름/webtoon/`). 표지를 바꾼 뒤(`ep cover`)에도 `ep webview`로 웹툰판의 표지를 다시 만든다.
+  웹툰판에서 글자가 얼굴을 가리면 `plan.yaml`의 그 글자 줄(`lines`)에 `web_at: bl`처럼 적고(tl/tr/bl/br), `.\nk.bat ep compile ep01`로 콘티를 다시 만든 뒤 `.\nk.bat ep webview ep01`. 웹툰판에서만 그 귀퉁이로 옮겨지고 쪽 만화의 말풍선은 그대로다.
+  계획표 없이 손으로 쓴 콘티면 `conti.yaml`의 `text` 줄에 적는다. 계획표가 있는데 `conti.yaml`만 고치면 계획표로 콘티를 다시 만들 때(`ep compile`, `ep fix`, 메뉴의 '대사만') 사라진다.
 - 다른 명령은 `.\nk.bat --help`, `.\nk.bat ep`, [nk_guide.md](nk_guide.md)에 있다. 계획표 형식은 [docs/prompt_plan.md](docs/prompt_plan.md), 콘티 규칙은 [docs/conti_rules.md](docs/conti_rules.md)를 보면 된다.
 
 ## 폴더
@@ -191,6 +196,9 @@ Korean file names: `작업실.bat` = Workshop, `만화만들기.bat` = Make a co
   .\nk.bat ep fix ep01 3 --add "smile"   # change cut 3's tags and redraw only that cut
   ```
   Output: `episodes/<episode>/out*/page_*.png`, `book.pdf`, one-sheet review `episodes/<episode>/auto/review.png`
+  A webtoon view is written next to the pages: `episodes/<episode>/out*/webtoon/index.html` — one cut per screen width, read by scrolling down, with the text laid over the pictures as HTML so it stays large on a phone. It is a self-contained folder (`index.html` + `img/` + fonts; no network, no JavaScript): move or upload the whole `webtoon` folder.
+  Turn it off with `webview: false` under `manga:` in `presets.yaml`; rebuild only this view with `.\nk.bat ep webview ep01` (add `--style name` for the restyled book, `out_name/webtoon/`). After changing the cover (`ep cover`), run `ep webview` again to refresh the cover in the webtoon view.
+  If a balloon covers a face in the webtoon view, add `web_at: bl` (tl/tr/bl/br) to that text line under `lines` in `plan.yaml`, recompile the storyboard (`.\nk.bat ep compile ep01`), then `.\nk.bat ep webview ep01`: it moves the text in the webtoon view only; the page comic is unchanged. For a hand-written storyboard without a plan, put it on the `text` line in `conti.yaml`. If a plan exists and you edit only `conti.yaml`, the change is lost the next time the storyboard is recompiled from the plan (`ep compile`, `ep fix`, menu "dialogue only").
 - More commands: `.\nk.bat --help`, `.\nk.bat ep`, [nk_guide.md](nk_guide.md). Plan format: [docs/prompt_plan.md](docs/prompt_plan.md), storyboard rules: [docs/conti_rules.md](docs/conti_rules.md) (all Korean)
 
 ### Folders

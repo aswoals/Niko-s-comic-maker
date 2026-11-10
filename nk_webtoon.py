@@ -3343,6 +3343,13 @@ def page_letter(nk, kit, args, c):
         raise
     except BaseException as e:
         print("[note] cover skipped (%s)" % " ".join(str(e).split())[:200])
+    try:                                 # 웹툰판 = out/webtoon/index.html (nk_webview.py, 끄기: presets.yaml manga: webview: false). 실패해도 페이지는 그대로
+        import nk_webview
+        nk_webview.attach(nk, kit, args.ep, c, out, st, getattr(args, "style", None))
+    except KeyboardInterrupt:
+        raise
+    except BaseException as e:
+        print("[note] webtoon view skipped (%s)" % " ".join(str(e).split())[:200])
 
 
 def letter(nk, kit, args):
@@ -3516,6 +3523,10 @@ def add_parser(sub, nk, kit):
         __import__("nk_cover").add_parser(esub, nk, kit)
     except Exception as e:
         print("[note] nk ep cover unavailable (%s)" % e)
+    try:                                 # nk ep webview <ep> [--style S] (웹툰판만 다시). nk_webview.py 가 없어도 다른 명령은 그대로
+        __import__("nk_webview").add_parser(esub, nk, kit)
+    except Exception as e:
+        print("[note] nk ep webview unavailable (%s)" % e)
     a = esub.add_parser("restyle",help="repaint final cuts in one art style with Qwen-Image-Edit, e.g. nk ep restyle ep01")
     a.add_argument("ep"); a.add_argument("cuts", nargs="*", type=int); a.add_argument("--style")
     a.add_argument("--seed", type=int); a.add_argument("--dry", action="store_true")

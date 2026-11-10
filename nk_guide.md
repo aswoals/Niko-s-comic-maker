@@ -89,9 +89,13 @@ VLM 판정은 100%가 아님 — 특히 작은 무늬(얼굴 무늬, 꼬리 끝)
 .\nk.bat ep redo ep01 12 19    # 12·19번 컷만 다시
 .\nk.bat ep pick ep01 12=3     # 12번 컷을 후보 3으로
 .\nk.bat ep letter ep01        # 대사·말풍선만 다시 (그림 재생성 없음)
+.\nk.bat ep webview ep01       # 웹툰판만 다시: out\webtoon\index.html (컷을 세로로 이어 보는 HTML. letter 때도 같이 만들어짐, 끄기 = presets.yaml manga: webview: false)
 ```
 - 결과: `out\page_01.png ~` (1600×2259, B5 비율) / `spread_01.png ~` (펼침면, 오른쪽이 홀수 페이지) / `book.pdf`
 - 컷 배치: conti.yaml 의 rows (h = 줄 높이 비율, cuts = 오른쪽부터, w = 폭 비율). 컷 크기에 맞는 비율로 생성 후 잘라 넣음.
 - `char: none` = 사물 컷 (LoRA·자동검수 안 함) / `n: 5` = 후보 수 / `place: left|right` = 잘라낼 때 남길 쪽
 - 대사 type: speech / thought / narration / sfx / offscreen(화면 밖 인물, 꼬리가 컷 밖으로). ※ `off` 는 yaml 이 false 로 읽으니 쓰지 말 것
+- 웹툰판에서만 글자 자리 옮기기: 글자 줄에 `web_at: tl|tr|bl|br` (글자가 얼굴을 가릴 때. 쪽 만화의 `at` 과 말풍선은 그대로).
+  plan.yaml 의 `lines` 에 적고 `nk ep compile` (콘티로 넘어옴) → `nk ep webview`. 계획표 없이 손으로 쓴 콘티면 conti.yaml 의 `text` 에 적고 `nk ep webview`.
+  계획표가 있는데 conti.yaml 만 고치면 계획표로 콘티를 다시 만들 때(`ep compile` · `ep fix` · 메뉴 '대사만') 사라짐
 - 페이지 모양 → presets.yaml `manga:`
